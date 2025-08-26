@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/cybozu-go/aptutil/apt"
-	"github.com/cybozu-go/log"
-	"github.com/cybozu-go/well"
+	"log/slog"
+	"golang.org/x/sync/errgroup"
 	"github.com/pkg/errors"
 )
 
@@ -41,51 +41,51 @@ type Mirror struct {
 }
 
 // NewMirror constructs a Mirror for given mirror id.
-func NewMirror(t time.Time, id string, c *Config) (*Mirror, error) {
-	dir := filepath.Clean(c.Dir)
-	mc, ok := c.Mirrors[id]
+func NewMirror(timestamp time.Time, mirrorID string, config *Config) (*Mirror, error) {
+	directory := filepath.Clean(config.Dir)
+	mirrorConfig, ok := config.Mirrors[mirrorID]
 	if !ok {
-		return nil, errors.New("no such mirror: " + id)
+		return nil, errors.New("no such mirror: " + mirrorID)
 	}
 
 	// sanity checks
-	if !validID.MatchString(id) {
-		return nil, errors.New("invalid id: " + id)
+	if !validID.MatchString(mirrorID) {
+		return nil, errors.New("invalid id: " + mirrorID)
 	}
-	if err := mc.Check(); err != nil {
-		return nil, errors.Wrap(err, id)
+	if err := mirrorConfig.Check(); err != nil {
+		return nil, errors.Wrap(err, mirrorID)
 	}
 
 	var currentStorage *Storage
-	curdir, err := filepath.EvalSymlinks(filepath.Join(dir, id))
+	currentDir, err := filepath.EvalSymlinks(filepath.Join(directory, mirrorID))
 	switch {
 	case os.IsNotExist(err):
 	case err != nil:
-		return nil, errors.Wrap(err, id)
+		return nil, errors.Wrap(err, mirrorID)
 	default:
-		currentStorage, err = NewStorage(filepath.Dir(curdir), id)
+		currentStorage, err = NewStorage(filepath.Dir(currentDir), mirrorID)
 		if err != nil {
-			return nil, errors.Wrap(err, id)
+			return nil, errors.Wrap(err, mirrorID)
 		}
 		err = currentStorage.Load()
 		if err != nil {
-			return nil, errors.Wrap(err, id)
+			return nil, errors.Wrap(err, mirrorID)
 		}
 	}
 
-	d := filepath.Join(dir, "."+id+"."+t.Format(timestampFormat))
-	err = os.Mkdir(d, 0755)
+	storageDirectory := filepath.Join(directory, "."+mirrorID+"."+timestamp.Format(timestampFormat))
+	err = os.Mkdir(storageDirectory, 0755)
 	if err != nil {
-		return nil, errors.Wrap(err, id)
+		return nil, errors.Wrap(err, mirrorID)
 	}
-	storage, err := NewStorage(d, id)
+	storage, err := NewStorage(storageDirectory, mirrorID)
 	if err != nil {
-		return nil, errors.Wrap(err, id)
+		return nil, errors.Wrap(err, mirrorID)
 	}
 
-	sem := make(chan struct{}, c.MaxConns)
-	for i := 0; i < c.MaxConns; i++ {
-		sem <- struct{}{}
+	semaphore := make(chan struct{}, config.MaxConns)
+	for i := 0; i < config.MaxConns; i++ {
+		semaphore <- struct{}{}
 	}
 
 	transport := clonedTransport(http.DefaultTransport)
@@ -94,20 +94,20 @@ func NewMirror(t time.Time, id string, c *Config) (*Mirror, error) {
 			Proxy: http.ProxyFromEnvironment,
 		}
 	}
-	transport.MaxIdleConnsPerHost = c.MaxConns
+	transport.MaxIdleConnsPerHost = config.MaxConns
 
-	mr := &Mirror{
-		id:        id,
-		dir:       dir,
-		mc:        mc,
+	mirror := &Mirror{
+		id:        mirrorID,
+		dir:       directory,
+		mc:        mirrorConfig,
 		storage:   storage,
 		current:   currentStorage,
-		semaphore: sem,
+		semaphore: semaphore,
 		client: &http.Client{
 			Transport: transport,
 		},
 	}
-	return mr, nil
+	return mirror, nil
 }
 
 func clonedTransport(rt http.RoundTripper) *http.Transport {
@@ -118,11 +118,11 @@ func clonedTransport(rt http.RoundTripper) *http.Transport {
 	return t.Clone()
 }
 
-func (m *Mirror) storeLink(fi *apt.FileInfo, fp string, byhash bool) error {
+func (m *Mirror) storeLink(fileInfo *apt.FileInfo, filePath string, byhash bool) error {
 	if byhash {
-		return m.storage.StoreLinkWithHash(fi, fp)
+		return m.storage.StoreLinkWithHash(fileInfo, filePath)
 	}
-	return m.storage.StoreLink(fi, fp)
+	return m.storage.StoreLink(fileInfo, filePath)
 }
 
 func (m *Mirror) extractItems(indices []*apt.FileInfo, indexMap map[string][]*apt.FileInfo, itemMap map[string]*apt.FileInfo, byhash bool) error {
@@ -192,19 +192,14 @@ func (m *Mirror) Update(ctx context.Context) error {
 	}
 
 	// download all files matching the configuration.
-	log.Info("download items", map[string]interface{}{
-		"repo":  m.id,
-		"items": len(itemMap),
-	})
+	slog.Info("download items", "repo", m.id, "items", len(itemMap))
 	_, err := m.downloadItems(ctx, itemMap)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
 
 	// all files are downloaded (or reused)
-	log.Info("saving meta data", map[string]interface{}{
-		"repo": m.id,
-	})
+	slog.Info("saving meta data", "repo", m.id)
 	err = m.storage.Save()
 	if err != nil {
 		return errors.Wrap(err, m.id)
@@ -216,28 +211,20 @@ func (m *Mirror) Update(ctx context.Context) error {
 		return errors.Wrap(err, m.id)
 	}
 
-	log.Info("update succeeded", map[string]interface{}{
-		"repo": m.id,
-	})
+	slog.Info("update succeeded", "repo", m.id)
 	return nil
 }
 
 // updateSuite partially updates mirror for a suite.
 func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[string]*apt.FileInfo) error {
-	log.Info("download Release/InRelease", map[string]interface{}{
-		"repo":  m.id,
-		"suite": suite,
-	})
+	slog.Info("download Release/InRelease", "repo", m.id, "suite", suite)
 	indexMap, byhash, err := m.downloadRelease(ctx, suite)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
 
 	if byhash {
-		log.Info("detected by-hash support", map[string]interface{}{
-			"repo":  m.id,
-			"suite": suite,
-		})
+		slog.Info("detected by-hash support", "repo", m.id, "suite", suite)
 	}
 
 	if len(indexMap) == 0 {
@@ -330,10 +317,7 @@ RETRY:
 	}
 
 	if retries > 0 {
-		log.Warn("retrying download", map[string]interface{}{
-			"repo": m.id,
-			"path": p,
-		})
+		slog.Warn("retrying download", "repo", m.id, "path", p)
 		time.Sleep(time.Duration(1<<(retries-1)) * time.Second)
 	}
 
@@ -363,13 +347,7 @@ RETRY:
 	}
 	defer closeRespBody(resp)
 
-	if log.Enabled(log.LvDebug) {
-		log.Debug("downloaded", map[string]interface{}{
-			"repo":               m.id,
-			"path":               p,
-			log.FnHTTPStatusCode: resp.StatusCode,
-		})
-	}
+	slog.Debug("downloaded", "repo", m.id, "path", p, "status_code", resp.StatusCode)
 
 	r.status = resp.StatusCode
 	if r.status >= 500 && retries < httpRetries {
@@ -409,11 +387,7 @@ RETRY:
 	if fi != nil && !fi.Same(fi2) {
 		if len(targets) > 1 {
 			targets = targets[1:]
-			log.Warn("try by-hash retrieval", map[string]interface{}{
-				"repo":   m.id,
-				"path":   p,
-				"target": targets[0],
-			})
+			slog.Warn("try by-hash retrieval", "repo", m.id, "path", p, "target", targets[0])
 			goto RETRY
 		}
 		r.err = errors.New("invalid checksum for " + p)
@@ -525,10 +499,7 @@ func (m *Mirror) downloadIndices(ctx context.Context,
 		fil = append(fil, fil2...)
 	}
 
-	log.Info("download other indices", map[string]interface{}{
-		"repo":    m.id,
-		"indices": len(fil),
-	})
+	slog.Info("download other indices", "repo", m.id, "indices", len(fil))
 
 	return m.downloadFiles(ctx, fil, true, byhash)
 }
@@ -548,29 +519,23 @@ func (m *Mirror) downloadFiles(ctx context.Context,
 	results := make(chan *dlResult, len(fil))
 	var reused, downloaded []*apt.FileInfo
 
-	env := well.NewEnvironment(ctx)
-	env.Go(func(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
 		var err error
 		reused, err = m.reuseOrDownload(ctx, fil, byhash, results)
 		return err
 	})
-	env.Go(func(ctx context.Context) error {
+	g.Go(func() error {
 		var err error
 		downloaded, err = m.recvResult(allowMissing, byhash, results)
 		return err
 	})
-	env.Stop()
-	err := env.Wait()
+	err := g.Wait()
 	if err != nil {
 		return nil, err
 	}
 
-	log.Info("stats", map[string]interface{}{
-		"repo":       m.id,
-		"total":      len(fil),
-		"reused":     len(reused),
-		"downloaded": len(downloaded),
-	})
+	slog.Info("stats", "repo", m.id, "total", len(fil), "reused", len(reused), "downloaded", len(downloaded))
 
 	// reused has enough capacity.  See reuseOrDownload.
 	return append(reused, downloaded...), nil
@@ -580,13 +545,12 @@ func (m *Mirror) reuseOrDownload(ctx context.Context, fil []*apt.FileInfo,
 	byhash bool, results chan<- *dlResult) ([]*apt.FileInfo, error) {
 
 	// environment to manage downloading goroutines.
-	env := well.NewEnvironment(ctx)
+	g, ctx := errgroup.WithContext(ctx)
 
 	// on return, wait for all DL goroutines then signal recvResult
 	// by closing results channel.
 	defer func() {
-		env.Stop()
-		env.Wait()
+		g.Wait()
 		close(results)
 	}()
 
@@ -599,12 +563,7 @@ func (m *Mirror) reuseOrDownload(ctx context.Context, fil []*apt.FileInfo,
 		now := time.Now()
 		if now.Sub(loggedAt) > progressInterval {
 			loggedAt = now
-			log.Info("download progress", map[string]interface{}{
-				"repo":      m.id,
-				"total":     len(fil),
-				"reused":    len(reused),
-				"downloads": i - len(reused),
-			})
+			slog.Info("download progress", "repo", m.id, "total", len(fil), "reused", len(reused), "downloads", i-len(reused))
 		}
 
 		if m.current != nil {
@@ -615,12 +574,7 @@ func (m *Mirror) reuseOrDownload(ctx context.Context, fil []*apt.FileInfo,
 					return nil, errors.Wrap(err, "storeLink")
 				}
 				reused = append(reused, localfi)
-				if log.Enabled(log.LvDebug) {
-					log.Debug("reuse item", map[string]interface{}{
-						"repo": m.id,
-						"path": fi.Path(),
-					})
-				}
+				slog.Debug("reuse item", "repo", m.id, "path", fi.Path())
 				continue
 			}
 		}
@@ -631,7 +585,7 @@ func (m *Mirror) reuseOrDownload(ctx context.Context, fil []*apt.FileInfo,
 		case <-m.semaphore:
 		}
 
-		env.Go(func(ctx context.Context) error {
+		g.Go(func() error {
 			m.download(ctx, fi.Path(), fi, byhash, results)
 			return nil
 		})
@@ -649,10 +603,7 @@ func (m *Mirror) handleResult(r *dlResult, allowMissing, byhash bool) (*apt.File
 	}
 
 	if allowMissing && r.status == http.StatusNotFound {
-		log.Warn("missing file", map[string]interface{}{
-			"repo": m.id,
-			"path": r.path,
-		})
+		slog.Warn("missing file", "repo", m.id, "path", r.path)
 		// return no error to continue
 		return nil, nil
 	}

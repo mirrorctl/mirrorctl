@@ -2,11 +2,11 @@ package mirror
 
 import (
 	"errors"
+	"log/slog"
 	"net/url"
+	"os"
 	"path"
 	"strings"
-
-	"github.com/cybozu-go/well"
 )
 
 const (
@@ -18,24 +18,24 @@ type tomlURL struct {
 }
 
 func (u *tomlURL) UnmarshalText(text []byte) error {
-	tu, err := url.Parse(string(text))
+	parsedURL, err := url.Parse(string(text))
 	if err != nil {
 		return err
 	}
-	switch tu.Scheme {
+	switch parsedURL.Scheme {
 	case "http":
 	case "https":
 	default:
-		return errors.New("unsupported scheme: " + tu.Scheme)
+		return errors.New("unsupported scheme: " + parsedURL.Scheme)
 	}
 
 	// for URL.ResolveReference
-	if !strings.HasSuffix(tu.Path, "/") {
-		tu.Path += "/"
-		tu.RawPath += "/"
+	if !strings.HasSuffix(parsedURL.Path, "/") {
+		parsedURL.Path += "/"
+		parsedURL.RawPath += "/"
 	}
 
-	u.URL = tu
+	u.URL = parsedURL
 	return nil
 }
 
@@ -55,19 +55,19 @@ func isFlat(suite string) bool {
 }
 
 // Check vaildates the configuration.
-func (mc *MirrConfig) Check() error {
-	if len(mc.Suites) == 0 {
+func (mirrorConfig *MirrConfig) Check() error {
+	if len(mirrorConfig.Suites) == 0 {
 		return errors.New("no suites")
 	}
 
-	flat := isFlat(mc.Suites[0])
-	if flat && len(mc.Sections) != 0 {
+	flat := isFlat(mirrorConfig.Suites[0])
+	if flat && len(mirrorConfig.Sections) != 0 {
 		return errors.New("flat repository cannot have sections")
 	}
-	if flat && len(mc.Architectures) != 0 {
+	if flat && len(mirrorConfig.Architectures) != 0 {
 		return errors.New("flat repository cannot have sections")
 	}
-	for _, suite := range mc.Suites[1:] {
+	for _, suite := range mirrorConfig.Suites[1:] {
 		if flat != isFlat(suite) {
 			return errors.New("mixed flat/non-flat in suites")
 		}
@@ -78,8 +78,8 @@ func (mc *MirrConfig) Check() error {
 
 // ReleaseFiles generates a list relative paths to "Release",
 // "Release.gpg", or "InRelease" files.
-func (mc *MirrConfig) ReleaseFiles(suite string) []string {
-	var l []string
+func (mirrorConfig *MirrConfig) ReleaseFiles(suite string) []string {
+	var fileList []string
 
 	relpath := suite
 	if !isFlat(suite) {
@@ -90,67 +90,105 @@ func (mc *MirrConfig) ReleaseFiles(suite string) []string {
 	if suite == "/" {
 		relpath = ""
 	}
-	l = append(l, path.Clean(path.Join(relpath, "Release")))
-	l = append(l, path.Clean(path.Join(relpath, "Release.gpg")))
-	l = append(l, path.Clean(path.Join(relpath, "Release.gz")))
-	l = append(l, path.Clean(path.Join(relpath, "Release.bz2")))
-	l = append(l, path.Clean(path.Join(relpath, "InRelease")))
-	l = append(l, path.Clean(path.Join(relpath, "InRelease.gz")))
-	l = append(l, path.Clean(path.Join(relpath, "InRelease.bz2")))
+	fileList = append(fileList, path.Clean(path.Join(relpath, "Release")))
+	fileList = append(fileList, path.Clean(path.Join(relpath, "Release.gpg")))
+	fileList = append(fileList, path.Clean(path.Join(relpath, "Release.gz")))
+	fileList = append(fileList, path.Clean(path.Join(relpath, "Release.bz2")))
+	fileList = append(fileList, path.Clean(path.Join(relpath, "InRelease")))
+	fileList = append(fileList, path.Clean(path.Join(relpath, "InRelease.gz")))
+	fileList = append(fileList, path.Clean(path.Join(relpath, "InRelease.bz2")))
 
-	return l
+	return fileList
 }
 
 // Resolve returns *url.URL for a relative path.
-func (mc *MirrConfig) Resolve(p string) *url.URL {
-	return mc.URL.ResolveReference(&url.URL{Path: p})
+func (mirrorConfig *MirrConfig) Resolve(path string) *url.URL {
+	return mirrorConfig.URL.ResolveReference(&url.URL{Path: path})
 }
 
-func rawName(p string) string {
-	base := path.Base(p)
+func rawName(filePath string) string {
+	base := path.Base(filePath)
 	ext := path.Ext(base)
 	return base[0 : len(base)-len(ext)]
 }
 
 // MatchingIndex returns true if mc is configured for the given index.
-func (mc *MirrConfig) MatchingIndex(p string) bool {
-	rn := rawName(p)
+func (mirrorConfig *MirrConfig) MatchingIndex(filePath string) bool {
+	rawName := rawName(filePath)
 
-	if rn == "Index" || rn == "Release" {
+	if rawName == "Index" || rawName == "Release" {
 		return true
 	}
 
-	if isFlat(mc.Suites[0]) {
+	if isFlat(mirrorConfig.Suites[0]) {
 		// scan Packages and Sources
-		switch rn {
+		switch rawName {
 		case "Packages":
 			return true
 		case "Sources":
-			return mc.Source
+			return mirrorConfig.Source
 		}
 		return false
 	}
 
-	pNoExt := p[0 : len(p)-len(path.Ext(p))]
-	var archs []string
-	archs = append(archs, "all")
-	archs = append(archs, mc.Architectures...)
-	for _, section := range mc.Sections {
-		for _, arch := range archs {
+	pathNoExt := filePath[0 : len(filePath)-len(path.Ext(filePath))]
+	var architectures []string
+	architectures = append(architectures, "all")
+	architectures = append(architectures, mirrorConfig.Architectures...)
+	for _, section := range mirrorConfig.Sections {
+		for _, arch := range architectures {
 			t := path.Join(path.Clean(section), "binary-"+arch, "Packages")
-			if strings.HasSuffix(pNoExt, t) {
+			if strings.HasSuffix(pathNoExt, t) {
 				return true
 			}
 		}
-		if mc.Source {
+		if mirrorConfig.Source {
 			t := path.Join(path.Clean(section), "source", "Sources")
-			if strings.HasSuffix(pNoExt, t) {
+			if strings.HasSuffix(pathNoExt, t) {
 				return true
 			}
 		}
 	}
 
 	return false
+}
+
+// LogConfig represents slog configuration options
+type LogConfig struct {
+	Level  string `toml:"level"`
+	Format string `toml:"format"`
+}
+
+// Apply configures the global slog logger based on the configuration
+func (logConfig *LogConfig) Apply() error {
+	var level slog.Level
+	switch strings.ToLower(logConfig.Level) {
+	case "debug":
+		level = slog.LevelDebug
+	case "info", "":
+		level = slog.LevelInfo
+	case "warn", "warning":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		return errors.New("invalid log level: " + logConfig.Level)
+	}
+
+	var handler slog.Handler
+	opts := &slog.HandlerOptions{Level: level}
+	
+	switch strings.ToLower(logConfig.Format) {
+	case "json":
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	case "plain", "", "text":
+		handler = slog.NewTextHandler(os.Stderr, opts)
+	default:
+		return errors.New("invalid log format: " + logConfig.Format)
+	}
+
+	slog.SetDefault(slog.New(handler))
+	return nil
 }
 
 // Config is a struct to read TOML configurations.
@@ -165,7 +203,7 @@ func (mc *MirrConfig) MatchingIndex(p string) bool {
 type Config struct {
 	Dir      string                 `toml:"dir"`
 	MaxConns int                    `toml:"max_conns"`
-	Log      well.LogConfig         `toml:"log"`
+	Log      LogConfig              `toml:"log"`
 	Mirrors  map[string]*MirrConfig `toml:"mirror"`
 }
 

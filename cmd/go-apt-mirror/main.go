@@ -7,7 +7,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cybozu-go/aptutil/mirror"
-	"github.com/cybozu-go/log"
+	"log/slog"
 )
 
 const (
@@ -22,24 +22,25 @@ func main() {
 	flag.Parse()
 
 	config := mirror.NewConfig()
-	md, err := toml.DecodeFile(*configPath, config)
+	metadata, err := toml.DecodeFile(*configPath, config)
 	if err != nil {
-		log.ErrorExit(err)
+		slog.Error("failed to decode config file", "error", err)
+		os.Exit(1)
 	}
-	if len(md.Undecoded()) > 0 {
-		log.Error("invalid config keys", map[string]interface{}{
-			"keys": fmt.Sprintf("%#v", md.Undecoded()),
-		})
+	if len(metadata.Undecoded()) > 0 {
+		slog.Error("invalid config keys", "keys", fmt.Sprintf("%#v", metadata.Undecoded()))
 		os.Exit(1)
 	}
 
 	err = config.Log.Apply()
 	if err != nil {
-		log.ErrorExit(err)
+		slog.Error("failed to apply log config", "error", err)
+		os.Exit(1)
 	}
 
 	err = mirror.Run(config, flag.Args())
 	if err != nil {
-		log.ErrorExit(err)
+		slog.Error("mirror run failed", "error", err)
+		os.Exit(1)
 	}
 }

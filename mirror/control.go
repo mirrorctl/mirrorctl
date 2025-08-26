@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cybozu-go/log"
-	"github.com/cybozu-go/well"
+	"golang.org/x/sync/errgroup"
+	"log/slog"
 	"github.com/pkg/errors"
 )
 
@@ -16,69 +16,69 @@ const (
 	lockFilename = ".lock"
 )
 
-func updateMirrors(ctx context.Context, c *Config, mirrors []string) error {
-	t := time.Now()
+func updateMirrors(ctx context.Context, config *Config, mirrors []string) error {
+	timestamp := time.Now()
 
-	var ml []*Mirror
-	for _, id := range mirrors {
-		m, err := NewMirror(t, id, c)
+	var mirrorList []*Mirror
+	for _, mirrorID := range mirrors {
+		mirror, err := NewMirror(timestamp, mirrorID, config)
 		if err != nil {
 			return err
 		}
-		ml = append(ml, m)
+		mirrorList = append(mirrorList, mirror)
 	}
 
-	log.Info("update starts", nil)
+	slog.Info("update starts")
 
 	// run goroutines in an environment.
-	env := well.NewEnvironment(ctx)
+	group, ctx := errgroup.WithContext(ctx)
 
-	for _, m := range ml {
-		env.Go(m.Update)
+	for _, mirror := range mirrorList {
+		mirror := mirror // capture loop variable
+		group.Go(func() error {
+			return mirror.Update(ctx)
+		})
 	}
-	env.Stop()
-	err := env.Wait()
+	err := group.Wait()
 
 	if err != nil {
-		log.Error("update failed", map[string]interface{}{
-			"error": err.Error(),
-		})
+		slog.Error("update failed", "error", err)
 		return err
 	}
 
-	log.Info("update ends", nil)
+	slog.Info("update ends")
 	return nil
 }
 
 // gc removes old mirror files, if any.
-func gc(ctx context.Context, c *Config) error {
+func gc(ctx context.Context, config *Config) error {
 	using := map[string]bool{
 		lockFilename: true,
 		".":          true,
 		"..":         true,
 	}
 
-	dentries, err := ioutil.ReadDir(c.Dir)
+	dirEntries, err := ioutil.ReadDir(config.Dir)
 	if err != nil {
 		return err
 	}
 
 	// search symlinks and its pointing directories
-	for _, dentry := range dentries {
-		if (dentry.Mode() & os.ModeSymlink) == 0 {
+	for _, dirEntry := range dirEntries {
+		if (dirEntry.Mode() & os.ModeSymlink) == 0 {
 			continue
 		}
-		p, err := filepath.EvalSymlinks(filepath.Join(c.Dir, dentry.Name()))
+		filePath, err := filepath.EvalSymlinks(filepath.Join(config.Dir, dirEntry.Name()))
 		if err != nil {
 			return errors.Wrap(err, "gc")
 		}
-		using[dentry.Name()] = true
-		using[filepath.Base(filepath.Dir(p))] = true
+		using[dirEntry.Name()] = true
+		using[filepath.Base(filepath.Dir(filePath))] = true
 	}
 
 	// remove unused dentries.
-	for _, dentry := range dentries {
-		if using[dentry.Name()] {
+	for _, dirEntry := range dirEntries {
+		if using[dirEntry.Name()] {
 			continue
 		}
 
@@ -88,11 +88,9 @@ func gc(ctx context.Context, c *Config) error {
 		default:
 		}
 
-		p := filepath.Join(c.Dir, dentry.Name())
-		log.Info("removing old mirror", map[string]interface{}{
-			"path": p,
-		})
-		err := os.RemoveAll(p)
+		filePath := filepath.Join(config.Dir, dirEntry.Name())
+		slog.Info("removing old mirror", "path", filePath)
+		err := os.RemoveAll(filePath)
 		if err != nil {
 			return errors.Wrap(err, "gc")
 		}
@@ -108,44 +106,44 @@ func gc(ctx context.Context, c *Config) error {
 // mirrors is a list of mirror IDs defined in the configuration file
 // (or keys in c.Mirrors).  If mirrors is an empty list, all mirrors
 // will be updated.
-func Run(c *Config, mirrors []string) error {
-	lockFile := filepath.Join(c.Dir, lockFilename)
-	f, err := os.Open(lockFile)
+func Run(config *Config, mirrors []string) error {
+	lockFile := filepath.Join(config.Dir, lockFilename)
+	file, err := os.Open(lockFile)
 	switch {
 	case os.IsNotExist(err):
-		f2, err := os.OpenFile(lockFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		file2, err := os.OpenFile(lockFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 		if err != nil {
 			return err
 		}
-		f = f2
+		file = file2
 	case err != nil:
 		return err
 	}
-	defer f.Close()
+	defer file.Close()
 
-	fl := Flock{f}
-	err = fl.Lock()
+	fileLock := Flock{file}
+	err = fileLock.Lock()
 	if err != nil {
 		return err
 	}
-	defer fl.Unlock()
+	defer fileLock.Unlock()
 
 	if len(mirrors) == 0 {
-		for id := range c.Mirrors {
-			mirrors = append(mirrors, id)
+		for mirrorID := range config.Mirrors {
+			mirrors = append(mirrors, mirrorID)
 		}
 	}
 
-	well.Go(func(ctx context.Context) error {
-		err := updateMirrors(ctx, c, mirrors)
+	group, ctx := errgroup.WithContext(context.Background())
+	group.Go(func() error {
+		err := updateMirrors(ctx, config, mirrors)
 		if err != nil {
-			if gcErr := gc(ctx, c); gcErr != nil {
+			if gcErr := gc(ctx, config); gcErr != nil {
 				err = errors.Wrap(err, gcErr.Error())
 			}
 			return err
 		}
-		return gc(ctx, c)
+		return gc(ctx, config)
 	})
-	well.Stop()
-	return well.Wait()
+	return group.Wait()
 }
