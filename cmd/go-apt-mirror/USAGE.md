@@ -35,7 +35,7 @@ Options
 | ------ | ------- | ----------- |
 | `-f`   | `/etc/apt/mirror.toml` | Configurations |
 
-As `go-apt-cacher` uses [github.com/cybozu-go/well](https://github.com/cybozu-go/well), flags provided by `well` is also available.
+go-apt-mirror uses Go's standard `slog` library for structured logging. Log level and format can be configured via the configuration file.
 
 
 [TOML]: https://github.com/toml-lang/toml
