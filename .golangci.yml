@@ -1,8 +1,82 @@
+version: 2
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+linters-settings:
+  revive:
+    severity: warning
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+      - name: unreachable-code
+        severity: warning
+        disabled: false
+      - name: redefines-builtin-id
+        severity: warning
+        disabled: false
+  staticcheck:
+    checks: ["all"]
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  gosec:
+    severity: "low"
+    confidence: "low"
+    excludes:
+      - G204 # Subprocess launched with variable
+  govet:
+    check-shadowing: true
+    enable-all: true
+  gocyclo:
+    min-complexity: 15
+  maligned:
+    suggest-new: true
+  dupl:
+    threshold: 100
+
 linters:
-    enable:
-        - dupl
-        - goconst
-        - gofmt
-        - golint
-        - typecheck
-        - unparam
+  disable-all: true
+  enable:
+    # Default linters
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+    # Additional recommended linters
+    - asasalint       # Check for pass []any as any in variadic func(...any)
+    - asciicheck      # Check that your code does not contain non-ASCII identifiers
+    - bidichk         # Check for dangerous unicode character sequences
+    - bodyclose       # Check whether HTTP response body is closed successfully
+    - dupl            # Tool for code clone detection
+    - errname         # Check that sentinel errors are prefixed with the Err and error types are suffixed with the Error
+    - errorlint       # Find code that will cause problems with the error wrapping scheme introduced in Go 1.13
+    - exhaustive      # Check exhaustiveness of enum switch statements
+    - gocritic        # Provides diagnostics that check for bugs, performance and style issues
+    - gocyclo         # Computes and checks the cyclomatic complexity of functions
+    - gosec           # Inspects source code for security problems
+    - misspell        # Finds commonly misspelled English words in comments
+    - nakedret        # Finds naked returns in functions greater than a specified function length
+    - predeclared     # Find code that shadows one of Go's predeclared identifiers
+    - revive          # Fast, configurable, extensible, flexible, and beautiful linter for Go
+    - tparallel       # Detects inappropriate usage of t.Parallel() method in your Go test codes
+    - unconvert       # Remove unnecessary type conversions
+    - unparam         # Reports unused function parameters
+    - whitespace      # Tool for detection of leading and trailing whitespace
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 3
+  exclude-use-default: false
