@@ -9,6 +9,9 @@ usage() {
     exit 2
 }
 
+VERSION="v1.4.9"
+GIT_COMMIT=$(git rev-parse --short HEAD)
+BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 # sanity check -------
 
@@ -36,10 +39,13 @@ XC_ARCH="${XC_ARCH:-$(go env GOARCH)}"
 
 # build ------
 
-echo "Building..."
+echo "Building ${TARGET} ${VERSION} (${GIT_COMMIT}) built at ${BUILD_DATE}..."
 
-${GOPATH}/bin/gox \
-    -os="${XC_OS}" \
-    -arch="${XC_ARCH}" \
-    -output "pkg/${TARGET}_{{.OS}}_{{.Arch}}/${TARGET}" \
+# Create output directory
+mkdir -p "pkg/${TARGET}_${XC_OS}_${XC_ARCH}"
+
+# Build with version information injected via ldflags
+GOOS="${XC_OS}" GOARCH="${XC_ARCH}" go build \
+    -ldflags "-X main.version=${VERSION} -X main.commit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" \
+    -o "pkg/${TARGET}_${XC_OS}_${XC_ARCH}/${TARGET}" \
     ./cmd/${TARGET}
