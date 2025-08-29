@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -144,7 +143,7 @@ func testFileInfoJSON(t *testing.T) {
 
 	if !fi.Same(fi2) {
 		t.Error(`!fi.Same(fi2)`)
-		t.Log(fmt.Sprintf("%#v", fi2))
+		t.Logf("%#v", fi2)
 	}
 }
 
@@ -236,6 +235,7 @@ func testFileInfoCopy(t *testing.T) {
 }
 
 func TestFileInfo(t *testing.T) {
+	t.Parallel()
 	t.Run("Same", testFileInfoSame)
 	t.Run("JSON", testFileInfoJSON)
 	t.Run("AddPrefix", testFileInfoAddPrefix)
