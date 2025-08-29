@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 	"github.com/ulikunitz/xz"
 )
 
@@ -181,7 +181,7 @@ func getFilesFromPackages(p string, r io.Reader) ([]*FileInfo, Paragraph, error)
 
 	for {
 		d, err := parser.Read()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -242,7 +242,7 @@ func getFilesFromSources(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 
 	for {
 		d, err := parser.Read()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

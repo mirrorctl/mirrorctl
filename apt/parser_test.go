@@ -4,6 +4,8 @@ import (
 	"io"
 	"os"
 	"testing"
+	
+	"github.com/cockroachdb/errors"
 )
 
 func TestParserRelease(t *testing.T) {
@@ -74,7 +76,7 @@ func TestParserRelease(t *testing.T) {
 	}
 
 	_, err = p.Read()
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Error(`err != io.EOF`)
 	}
 }
@@ -106,14 +108,12 @@ func TestParserInRelease(t *testing.T) {
 
 	if sha256, ok := d["SHA256"]; !ok {
 		t.Error(`sha256, ok := d["SHA256"]; !ok`)
-	} else {
-		if sha256[len(sha256)-1] != "aefe5a7388a3e638df10ac8f0cd42e6c2947cc766c2f33a3944a5b4900369d1e          7727612 universe/source/Sources.xz" {
-			t.Error(`sha256[len(sha256)-1] != "aefe5a7388a3e638df10ac8f0cd42e6c2947cc766c2f33a3944a5b4900369d1e          7727612 universe/source/Sources.xz"`)
-		}
+	} else if sha256[len(sha256)-1] != "aefe5a7388a3e638df10ac8f0cd42e6c2947cc766c2f33a3944a5b4900369d1e          7727612 universe/source/Sources.xz" {
+		t.Error(`sha256[len(sha256)-1] != "aefe5a7388a3e638df10ac8f0cd42e6c2947cc766c2f33a3944a5b4900369d1e          7727612 universe/source/Sources.xz"`)
 	}
 
 	_, err = p.Read()
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Error(`err != io.EOF`)
 	}
 }
@@ -174,7 +174,7 @@ func TestParserPackages(t *testing.T) {
 	}
 
 	_, err = p.Read()
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Error(`err != io.EOF`)
 	}
 }

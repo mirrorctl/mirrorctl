@@ -2,14 +2,13 @@ package mirror
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 	"log/slog"
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 )
 
 const (
@@ -58,14 +57,18 @@ func gc(ctx context.Context, config *Config) error {
 		"..":         true,
 	}
 
-	dirEntries, err := ioutil.ReadDir(config.Dir)
+	dirEntries, err := os.ReadDir(config.Dir)
 	if err != nil {
 		return err
 	}
 
 	// search symlinks and its pointing directories
 	for _, dirEntry := range dirEntries {
-		if (dirEntry.Mode() & os.ModeSymlink) == 0 {
+		info, err := dirEntry.Info()
+		if err != nil {
+			return errors.Wrap(err, "gc")
+		}
+		if (info.Mode() & os.ModeSymlink) == 0 {
 			continue
 		}
 		filePath, err := filepath.EvalSymlinks(filepath.Join(config.Dir, dirEntry.Name()))

@@ -1,3 +1,4 @@
+// Package main implements the go-apt-mirror command-line tool for mirroring APT repositories.
 package main
 
 import (
@@ -53,7 +54,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
 	Long:  "Print version information including build details",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		fmt.Printf("go-apt-mirror %s\n", version)
 		fmt.Printf("commit: %s\n", commit)
 		fmt.Printf("built: %s\n", buildDate)

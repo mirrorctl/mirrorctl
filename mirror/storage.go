@@ -2,13 +2,12 @@ package mirror
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/cybozu-go/aptutil/apt"
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 )
 
 const (
@@ -82,7 +81,7 @@ func (s *Storage) Load() error {
 // opens the file for reading and writing,
 // and returns the resulting *os.File.
 func (s *Storage) TempFile() (*os.File, error) {
-	return ioutil.TempFile(s.dir, "_tmp")
+	return os.CreateTemp(s.dir, "_tmp")
 }
 
 // Save saves storage contents persistently.

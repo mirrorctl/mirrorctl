@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -15,7 +14,7 @@ import (
 	"github.com/cybozu-go/aptutil/apt"
 	"log/slog"
 	"golang.org/x/sync/errgroup"
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 )
 
 const (
@@ -270,7 +269,7 @@ type dlResult struct {
 }
 
 func closeRespBody(r *http.Response) {
-	io.Copy(ioutil.Discard, r.Body)
+	io.Copy(io.Discard, r.Body)
 	r.Body.Close()
 }
 
@@ -282,7 +281,6 @@ func closeAndRemoveFile(f *os.File) {
 // download is a goroutine to download an item.
 func (m *Mirror) download(ctx context.Context,
 	p string, fi *apt.FileInfo, byhash bool, ch chan<- *dlResult) {
-
 	var tempfile *os.File
 	r := &dlResult{
 		path: p,
@@ -515,7 +513,6 @@ func (m *Mirror) downloadItems(ctx context.Context,
 
 func (m *Mirror) downloadFiles(ctx context.Context,
 	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
-
 	results := make(chan *dlResult, len(fil))
 	var reused, downloaded []*apt.FileInfo
 
@@ -543,7 +540,6 @@ func (m *Mirror) downloadFiles(ctx context.Context,
 
 func (m *Mirror) reuseOrDownload(ctx context.Context, fil []*apt.FileInfo,
 	byhash bool, results chan<- *dlResult) ([]*apt.FileInfo, error) {
-
 	// environment to manage downloading goroutines.
 	g, ctx := errgroup.WithContext(ctx)
 
