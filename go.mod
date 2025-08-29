@@ -2,7 +2,7 @@ module github.com/cybozu-go/aptutil
 
 require (
 	github.com/BurntSushi/toml v1.5.0
-	github.com/ulikunitz/xz v0.5.10
+	github.com/ulikunitz/xz v0.5.14
 	golang.org/x/sync v0.16.0
 )
 
