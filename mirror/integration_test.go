@@ -29,10 +29,10 @@ func NewMockAPTRepository() *MockAPTRepository {
 	mock := &MockAPTRepository{
 		responses: make(map[string]string),
 	}
-	
+
 	// Set up default APT repository files
 	mock.setupDefaultResponses()
-	
+
 	mock.server = httptest.NewServer(http.HandlerFunc(mock.handleRequest))
 	return mock
 }
@@ -63,32 +63,32 @@ func (m *MockAPTRepository) RequestCount() int64 {
 
 func (m *MockAPTRepository) handleRequest(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&m.requestCount, 1)
-	
+
 	m.mu.RLock()
 	fail := m.failRequests
 	slow := m.slowResponses
 	m.mu.RUnlock()
-	
+
 	if fail {
 		http.Error(w, "Mock server error", http.StatusInternalServerError)
 		return
 	}
-	
+
 	if slow {
 		time.Sleep(100 * time.Millisecond)
 	}
-	
+
 	path := strings.TrimPrefix(r.URL.Path, "/")
-	
+
 	m.mu.RLock()
 	content, exists := m.responses[path]
 	m.mu.RUnlock()
-	
+
 	if !exists {
 		http.NotFound(w, r)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(content))
 }
@@ -122,7 +122,7 @@ func TestMirrorUpdateCycle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	t.Parallel()
 
 	// Create mock APT repository
@@ -142,7 +142,7 @@ func TestMirrorUpdateCycle(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to parse mock URL:", err)
 	}
-	
+
 	config := &Config{
 		Dir: tempDir,
 		Mirrors: map[string]*MirrConfig{
@@ -157,7 +157,7 @@ func TestMirrorUpdateCycle(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "test-mirror", config)
+	mirror, err := NewMirror(timestamp, "test-mirror", config, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -172,7 +172,7 @@ func TestMirrorUpdateCycle(t *testing.T) {
 	// Verify files were created
 	expectedFiles := []string{
 		"dists/test/Release",
-		"dists/test/main/binary-amd64/Packages", 
+		"dists/test/main/binary-amd64/Packages",
 	}
 
 	for _, expectedFile := range expectedFiles {
@@ -196,7 +196,7 @@ func TestMirrorNetworkErrors(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	t.Parallel()
 
 	// Create mock APT repository that fails requests
@@ -217,7 +217,7 @@ func TestMirrorNetworkErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to parse mock URL:", err)
 	}
-	
+
 	config := &Config{
 		Dir: tempDir,
 		Mirrors: map[string]*MirrConfig{
@@ -232,7 +232,7 @@ func TestMirrorNetworkErrors(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "error-test", config)
+	mirror, err := NewMirror(timestamp, "error-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -252,7 +252,7 @@ func TestMirrorConcurrentUpdates(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	t.Parallel()
 
 	// Create mock APT repository with slow responses
@@ -273,7 +273,7 @@ func TestMirrorConcurrentUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to parse mock URL:", err)
 	}
-	
+
 	config := &Config{
 		Dir: tempDir,
 		Mirrors: map[string]*MirrConfig{
@@ -297,7 +297,7 @@ func TestMirrorConcurrentUpdates(t *testing.T) {
 			defer wg.Done()
 
 			timestamp := time.Now()
-			mirror, err := NewMirror(timestamp, "concurrent-test", config)
+			mirror, err := NewMirror(timestamp, "concurrent-test", config, false)
 			if err != nil {
 				errors <- fmt.Errorf("goroutine %d: failed to create mirror: %v", id, err)
 				return
@@ -340,7 +340,7 @@ func TestMirrorContextCancellation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	t.Parallel()
 
 	// Create mock APT repository with very slow responses
@@ -361,7 +361,7 @@ func TestMirrorContextCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to parse mock URL:", err)
 	}
-	
+
 	config := &Config{
 		Dir: tempDir,
 		Mirrors: map[string]*MirrConfig{
@@ -376,7 +376,7 @@ func TestMirrorContextCancellation(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "cancel-test", config)
+	mirror, err := NewMirror(timestamp, "cancel-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -402,7 +402,7 @@ func TestMirrorPartialDownload(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	t.Parallel()
 
 	// Create a mock server that serves partial content
@@ -410,7 +410,7 @@ func TestMirrorPartialDownload(t *testing.T) {
 		// Simulate connection drop by closing connection early
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		
+
 		// Write partial content then close
 		io.WriteString(w, "Partial content...")
 		if f, ok := w.(http.Flusher); ok {
@@ -433,7 +433,7 @@ func TestMirrorPartialDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to parse server URL:", err)
 	}
-	
+
 	config := &Config{
 		Dir: tempDir,
 		Mirrors: map[string]*MirrConfig{
@@ -448,7 +448,7 @@ func TestMirrorPartialDownload(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "partial-test", config)
+	mirror, err := NewMirror(timestamp, "partial-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -456,7 +456,7 @@ func TestMirrorPartialDownload(t *testing.T) {
 	// Test: Update should handle partial downloads
 	ctx := context.Background()
 	err = mirror.Update(ctx)
-	
+
 	// We expect this to fail due to incomplete/invalid APT repository data
 	if err == nil {
 		t.Error("Expected mirror update to fail with partial download")

@@ -25,9 +25,16 @@ type HTTPClient struct {
 
 // NewHTTPClient creates a new HTTP client for downloads
 func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Storage) *HTTPClient {
+	semaphore := make(chan struct{}, maxConns)
+
+	// Pre-fill the semaphore with tokens
+	for i := 0; i < maxConns; i++ {
+		semaphore <- struct{}{}
+	}
+
 	return &HTTPClient{
 		client:    clonedTransport(),
-		semaphore: make(chan struct{}, maxConns),
+		semaphore: semaphore,
 		mirrorID:  mirrorID,
 		storage:   storage,
 		current:   current,
@@ -53,8 +60,20 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrConfig,
 
 	defer func() {
 		r.tempfile = tempfile
-		ch <- r
+		// Return semaphore token first, then send result
 		h.semaphore <- struct{}{}
+		// Safely send to channel with recovery from panic
+		func() {
+			defer func() {
+				if recover() != nil {
+					// Channel was closed, clean up tempfile if needed
+					if tempfile != nil {
+						closeAndRemoveFile(tempfile)
+					}
+				}
+			}()
+			ch <- r
+		}()
 	}()
 
 	var retries uint
@@ -110,10 +129,10 @@ RETRY:
 	}
 	defer closeRespBody(resp)
 
-	slog.Debug("downloaded", "repo", h.mirrorID, "path", p, "status_code", resp.StatusCode)
 
 	r.status = resp.StatusCode
 	if r.status >= 500 && retries < httpRetries {
+		slog.Debug("server error, retrying", "repo", h.mirrorID, "path", p, "status", r.status, "attempt", retries+1)
 		retries++
 		goto RETRY
 	}
@@ -141,9 +160,9 @@ RETRY:
 		r.err = errors.New("tempfile.Sync failed")
 		return
 	}
-	err = os.Chmod(tempfile.Name(), 0644)
+	err = os.Chmod(tempfile.Name(), 0600)
 	if err != nil {
-		r.err = errors.New("os.Chmod(tempfile.Name(), 0644) failed")
+		r.err = errors.New("os.Chmod(tempfile.Name(), 0600) failed")
 		return
 	}
 
@@ -188,6 +207,7 @@ func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig
 	}
 
 	slog.Info("stats", "repo", h.mirrorID, "total", len(fil), "reused", len(reused), "downloaded", len(downloaded))
+	slog.Debug("download complete", "repo", h.mirrorID, "reused_files", len(reused), "new_downloads", len(downloaded))
 
 	// reused has enough capacity.  See reuseOrDownload.
 	return append(reused, downloaded...), nil
@@ -207,27 +227,21 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConf
 	}()
 
 	reused := make([]*apt.FileInfo, 0, len(fil))
-	loggedAt := time.Now()
 
-	for i, fi := range fil {
+	for _, fi := range fil {
 		// avoid assignment
 		fi := fi
-		now := time.Now()
-		if now.Sub(loggedAt) > progressInterval {
-			loggedAt = now
-			slog.Info("download progress", "repo", h.mirrorID, "total", len(fil), "reused", len(reused), "downloads", i-len(reused))
-		}
 
 		// Try to reuse existing file if we have current storage
 		if h.current != nil {
 			localfi, fullpath := h.current.Lookup(fi, byhash)
 			if localfi != nil {
+				slog.Debug("reusing existing file", "repo", h.mirrorID, "path", fi.Path())
 				err := h.storeLink(localfi, fullpath, byhash)
 				if err != nil {
 					return nil, errors.Wrap(err, "storeLink")
 				}
 				reused = append(reused, localfi)
-				slog.Debug("reuse item", "repo", h.mirrorID, "path", fi.Path())
 				continue
 			}
 		}
@@ -271,7 +285,7 @@ func (h *HTTPClient) handleResult(r *dlResult, allowMissing, byhash bool) (*apt.
 		return nil, errors.Wrap(err, "store")
 	}
 
-	slog.Debug("downloaded", "repo", h.mirrorID, "path", r.path)
+	slog.Debug("file downloaded successfully", "repo", h.mirrorID, "path", r.path, "size", r.fi.Size())
 	return r.fi, nil
 }
 
@@ -300,13 +314,20 @@ func (h *HTTPClient) storeLink(fileInfo *apt.FileInfo, filePath string, byhash b
 
 // closeRespBody closes HTTP response body
 func closeRespBody(resp *http.Response) {
-	resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		slog.Warn("failed to close response body", "error", err)
+	}
 }
 
 // closeAndRemoveFile closes and removes a temporary file
 func closeAndRemoveFile(f *os.File) {
-	f.Close()
-	os.Remove(f.Name())
+	filename := f.Name()
+	if err := f.Close(); err != nil {
+		slog.Warn("failed to close temp file", "file", filename, "error", err)
+	}
+	if err := os.Remove(filename); err != nil {
+		slog.Warn("failed to remove temp file", "file", filename, "error", err)
+	}
 }
 
 // clonedTransport creates a new HTTP client with optimized transport settings

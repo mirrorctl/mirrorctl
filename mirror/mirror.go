@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cybozu-go/aptutil/apt"
 	"log/slog"
-	"github.com/cockroachdb/errors"
 )
 
 const (
@@ -32,10 +32,11 @@ type Mirror struct {
 	current    *Storage
 	httpClient *HTTPClient
 	parser     *APTParser
+	noPGPCheck bool
 }
 
 // NewMirror constructs a Mirror for given mirror id.
-func NewMirror(timestamp time.Time, mirrorID string, config *Config) (*Mirror, error) {
+func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck bool) (*Mirror, error) {
 	directory := filepath.Clean(config.Dir)
 	mirrorConfig, ok := config.Mirrors[mirrorID]
 	if !ok {
@@ -68,7 +69,7 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config) (*Mirror, e
 	}
 
 	storageDirectory := filepath.Join(directory, "."+mirrorID+"."+timestamp.Format(timestampFormat))
-	err = os.Mkdir(storageDirectory, 0755)
+	err = os.Mkdir(storageDirectory, 0750)
 	if err != nil {
 		return nil, errors.Wrap(err, mirrorID)
 	}
@@ -89,12 +90,10 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config) (*Mirror, e
 		current:    currentStorage,
 		httpClient: httpClient,
 		parser:     parser,
+		noPGPCheck: noPGPCheck,
 	}
 	return mirror, nil
 }
-
-
-
 
 func (m *Mirror) replaceLink() error {
 	tname := filepath.Join(m.dir, m.id+".tmp")
@@ -130,10 +129,8 @@ func (m *Mirror) Update(ctx context.Context) error {
 	}
 
 	// All files are downloaded via updateSuite -> parser.downloadItems
-	slog.Info("all items processed", "repo", m.id, "items", len(itemMap))
 
 	// all files are downloaded (or reused)
-	slog.Info("saving meta data", "repo", m.id)
 	err := m.storage.Save()
 	if err != nil {
 		return errors.Wrap(err, m.id)
@@ -152,18 +149,18 @@ func (m *Mirror) Update(ctx context.Context) error {
 // updateSuite partially updates mirror for a suite.
 func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[string]*apt.FileInfo) error {
 	slog.Info("download Release/InRelease", "repo", m.id, "suite", suite)
-	indexMap, byhash, err := m.parser.downloadRelease(ctx, m.httpClient, suite)
+	slog.Debug("processing suite", "repo", m.id, "suite", suite, "sections", m.mc.Sections, "architectures", m.mc.Architectures)
+	indexMap, byhash, err := m.parser.downloadRelease(ctx, m.httpClient, suite, m)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
 
-	if byhash {
-		slog.Info("detected by-hash support", "repo", m.id, "suite", suite)
-	}
 
 	if len(indexMap) == 0 {
 		return errors.New(m.id + ": found no Release/InRelease")
 	}
+
+	slog.Debug("release files parsed", "repo", m.id, "suite", suite, "by_hash", byhash, "index_files", len(indexMap))
 
 	// WORKAROUND: some (zabbix) repositories returns wrong contents
 	// for non-existent files such as Sources (looks like the body of
@@ -182,16 +179,20 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 	}
 
 	// download (or reuse) all indices
+	slog.Debug("downloading index files", "repo", m.id, "suite", suite)
 	indices, err := m.parser.downloadIndices(ctx, m.httpClient, indexMap, byhash)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
+	slog.Debug("index files downloaded", "repo", m.id, "suite", suite, "count", len(indices))
 
 	// extract file information from indices and download items
+	slog.Debug("downloading package files", "repo", m.id, "suite", suite)
 	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
+	slog.Debug("package files processed", "repo", m.id, "suite", suite, "count", len(items))
 
 	// Add items to the item map
 	for _, item := range items {
@@ -199,14 +200,3 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 	}
 	return nil
 }
-
-
-
-
-
-
-
-
-
-
-

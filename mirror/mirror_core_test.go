@@ -40,7 +40,7 @@ func TestNewMirrorCreation(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "test-mirror", config)
+	mirror, err := NewMirror(timestamp, "test-mirror", config, false)
 	if err != nil {
 		t.Error("Failed to create valid mirror:", err)
 	}
@@ -54,7 +54,7 @@ func TestNewMirrorCreation(t *testing.T) {
 	}
 
 	// Test 2: Non-existent mirror ID should fail
-	_, err = NewMirror(timestamp, "non-existent", config)
+	_, err = NewMirror(timestamp, "non-existent", config, false)
 	if err == nil {
 		t.Error("Should fail with non-existent mirror ID")
 	}
@@ -65,11 +65,11 @@ func TestNewMirrorCreation(t *testing.T) {
 	if storageDir == "" {
 		t.Error("Storage directory should not be empty")
 	}
-	
+
 	if _, err := os.Stat(storageDir); os.IsNotExist(err) {
 		t.Error("Storage directory should be created")
 	}
-	
+
 	// Check that the storage directory follows the expected pattern
 	expectedPrefix := filepath.Join(tempDir, ".test-mirror.")
 	if !filepath.HasPrefix(storageDir, expectedPrefix) {
@@ -109,7 +109,7 @@ func TestMirrorConfigValidation(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	_, err = NewMirror(timestamp, "invalid-mirror", config)
+	_, err = NewMirror(timestamp, "invalid-mirror", config, false)
 	if err == nil {
 		t.Error("Should fail with empty suites")
 	}
@@ -123,12 +123,12 @@ func TestMirrorConfigValidation(t *testing.T) {
 
 	config.Mirrors["invalid-mirror"] = &MirrConfig{
 		URL:           *flatURL,
-		Suites:        []string{"/"}, // Flat repository
+		Suites:        []string{"/"},    // Flat repository
 		Sections:      []string{"main"}, // Should not have sections
 		Architectures: []string{"amd64"},
 	}
 
-	_, err = NewMirror(timestamp, "invalid-mirror", config)
+	_, err = NewMirror(timestamp, "invalid-mirror", config, false)
 	if err == nil {
 		t.Error("Should fail with flat repository having sections")
 	}
@@ -165,7 +165,7 @@ func TestMirrorStorageOperations(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "storage-test", config)
+	mirror, err := NewMirror(timestamp, "storage-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -219,7 +219,7 @@ func TestMirrorContextHandling(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "context-test", config)
+	mirror, err := NewMirror(timestamp, "context-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -258,14 +258,14 @@ func TestReleaseFileGeneration(t *testing.T) {
 
 	// Test release file generation for non-flat repository
 	releaseFiles := config.ReleaseFiles("focal")
-	
+
 	expectedFiles := []string{
 		"dists/focal/Release",
 		"dists/focal/Release.gpg",
 		"dists/focal/Release.gz",
 		"dists/focal/Release.bz2",
 		"dists/focal/InRelease",
-		"dists/focal/InRelease.gz", 
+		"dists/focal/InRelease.gz",
 		"dists/focal/InRelease.bz2",
 	}
 
@@ -285,7 +285,7 @@ func TestReleaseFileGeneration(t *testing.T) {
 		}
 	}
 
-	// Test flat repository release files  
+	// Test flat repository release files
 	flatConfig := &MirrConfig{
 		URL:    *mockURL,
 		Suites: []string{"/"},
@@ -298,9 +298,9 @@ func TestReleaseFileGeneration(t *testing.T) {
 
 	// Flat repository files should be at root level
 	for _, file := range flatReleaseFiles {
-		if file != "Release" && file != "Release.gpg" && file != "Release.gz" && 
-		   file != "Release.bz2" && file != "InRelease" && file != "InRelease.gz" && 
-		   file != "InRelease.bz2" {
+		if file != "Release" && file != "Release.gpg" && file != "Release.gz" &&
+			file != "Release.bz2" && file != "InRelease" && file != "InRelease.gz" &&
+			file != "InRelease.bz2" {
 			t.Errorf("Unexpected flat repository file: %s", file)
 		}
 	}

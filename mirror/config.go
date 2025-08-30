@@ -46,6 +46,9 @@ type MirrConfig struct {
 	Sections      []string `toml:"sections"`
 	Source        bool     `toml:"mirror_source"`
 	Architectures []string `toml:"architectures"`
+
+	PGPKeyPath string `toml:"pgp_key_path,omitempty"`
+	NoPGPCheck bool   `toml:"no_pgp_check,omitempty"`
 }
 
 // isFlat returns true if suite ends with "/" as described in
@@ -70,6 +73,24 @@ func (mirrorConfig *MirrConfig) Check() error {
 	for _, suite := range mirrorConfig.Suites[1:] {
 		if flat != isFlat(suite) {
 			return errors.New("mixed flat/non-flat in suites")
+		}
+	}
+
+	// PGP configuration validation
+	if !mirrorConfig.NoPGPCheck && mirrorConfig.PGPKeyPath != "" {
+		if _, err := os.Stat(mirrorConfig.PGPKeyPath); os.IsNotExist(err) {
+			return errors.New("pgp_key_path does not exist: " + mirrorConfig.PGPKeyPath)
+		} else if err != nil {
+			return errors.New("cannot access pgp_key_path: " + err.Error())
+		}
+
+		// Check if file is readable
+		file, err := os.Open(mirrorConfig.PGPKeyPath)
+		if err != nil {
+			return errors.New("cannot read pgp_key_path: " + err.Error())
+		}
+		if err := file.Close(); err != nil {
+			slog.Warn("failed to close PGP key file during validation", "path", mirrorConfig.PGPKeyPath, "error", err)
 		}
 	}
 
@@ -177,7 +198,7 @@ func (logConfig *LogConfig) Apply() error {
 
 	var handler slog.Handler
 	opts := &slog.HandlerOptions{Level: level}
-	
+
 	switch strings.ToLower(logConfig.Format) {
 	case "json":
 		handler = slog.NewJSONHandler(os.Stderr, opts)
@@ -195,11 +216,11 @@ func (logConfig *LogConfig) Apply() error {
 //
 // Use https://github.com/BurntSushi/toml as follows:
 //
-//    config := mirror.NewConfig()
-//    md, err := toml.DecodeFile("/path/to/config.toml", config)
-//    if err != nil {
-//        ...
-//    }
+//	config := mirror.NewConfig()
+//	md, err := toml.DecodeFile("/path/to/config.toml", config)
+//	if err != nil {
+//	    ...
+//	}
 type Config struct {
 	Dir      string                 `toml:"dir"`
 	MaxConns int                    `toml:"max_conns"`

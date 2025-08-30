@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 	"testing"
-	
+
 	"github.com/cockroachdb/errors"
 )
 

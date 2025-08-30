@@ -13,12 +13,12 @@ func TestMirrorWithRealRepository(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real repository test in short mode")
 	}
-	
+
 	t.Parallel()
 
 	// Use Microsoft's small Slurm repository - only contains ~10-20 packages
 	repoURL := "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
-	
+
 	// Create temporary directory for mirror
 	tempDir, err := os.MkdirTemp("", "real-mirror-test-")
 	if err != nil {
@@ -48,7 +48,7 @@ func TestMirrorWithRealRepository(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "slurm-test", config)
+	mirror, err := NewMirror(timestamp, "slurm-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -66,10 +66,10 @@ func TestMirrorWithRealRepository(t *testing.T) {
 
 	// Verify basic files were created
 	storageDir := mirror.storage.Dir()
-	
+
 	// Log the storage directory structure for debugging
 	t.Logf("Storage directory: %s", storageDir)
-	
+
 	// Check storage was populated (should have some files)
 	entries, err := os.ReadDir(storageDir)
 	if err != nil {
@@ -78,7 +78,7 @@ func TestMirrorWithRealRepository(t *testing.T) {
 		t.Error("Storage directory is empty")
 	} else {
 		t.Logf("Storage directory contains %d entries", len(entries))
-		
+
 		// List first few entries for debugging
 		for i, entry := range entries {
 			if i < 5 { // Show first 5 entries
@@ -86,7 +86,7 @@ func TestMirrorWithRealRepository(t *testing.T) {
 			}
 		}
 	}
-	
+
 	// Check if Release file exists anywhere in storage
 	var releaseFound bool
 	filepath.WalkDir(storageDir, func(path string, d os.DirEntry, err error) error {
@@ -99,7 +99,7 @@ func TestMirrorWithRealRepository(t *testing.T) {
 		}
 		return nil
 	})
-	
+
 	if !releaseFound {
 		t.Log("No Release file found in storage directory")
 	}
@@ -118,11 +118,11 @@ func TestMirrorRealRepoResume(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real repository resume test in short mode")
 	}
-	
+
 	t.Parallel()
 
 	repoURL := "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
-	
+
 	// Create temporary directory for mirror
 	tempDir, err := os.MkdirTemp("", "resume-mirror-test-")
 	if err != nil {
@@ -151,7 +151,7 @@ func TestMirrorRealRepoResume(t *testing.T) {
 
 	// First attempt: Start mirror but cancel quickly
 	timestamp := time.Now()
-	mirror1, err := NewMirror(timestamp, "resume-test", config)
+	mirror1, err := NewMirror(timestamp, "resume-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create first mirror:", err)
 	}
@@ -169,7 +169,7 @@ func TestMirrorRealRepoResume(t *testing.T) {
 	}
 
 	// Second attempt: Resume with same timestamp and longer timeout
-	mirror2, err := NewMirror(timestamp, "resume-test", config)
+	mirror2, err := NewMirror(timestamp, "resume-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create second mirror:", err)
 	}
@@ -192,12 +192,12 @@ func TestMirrorNetworkResilience(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping network resilience test in short mode")
 	}
-	
+
 	t.Parallel()
 
 	// Use a non-existent subdomain to test network failure handling
 	badRepoURL := "https://nonexistent.packages.microsoft.com/repos/slurm-ubuntu-noble/"
-	
+
 	// Create temporary directory for mirror
 	tempDir, err := os.MkdirTemp("", "network-test-")
 	if err != nil {
@@ -225,7 +225,7 @@ func TestMirrorNetworkResilience(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "network-fail-test", config)
+	mirror, err := NewMirror(timestamp, "network-fail-test", config, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}

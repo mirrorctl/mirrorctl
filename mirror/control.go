@@ -6,21 +6,21 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"golang.org/x/sync/errgroup"
 	"log/slog"
-	"github.com/cockroachdb/errors"
 )
 
 const (
 	lockFilename = ".lock"
 )
 
-func updateMirrors(ctx context.Context, config *Config, mirrors []string) error {
+func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPCheck bool) error {
 	timestamp := time.Now()
 
 	var mirrorList []*Mirror
 	for _, mirrorID := range mirrors {
-		mirror, err := NewMirror(timestamp, mirrorID, config)
+		mirror, err := NewMirror(timestamp, mirrorID, config, noPGPCheck)
 		if err != nil {
 			return err
 		}
@@ -39,9 +39,7 @@ func updateMirrors(ctx context.Context, config *Config, mirrors []string) error 
 		})
 	}
 	err := group.Wait()
-
 	if err != nil {
-		slog.Error("update failed", "error", err)
 		return err
 	}
 
@@ -109,7 +107,7 @@ func gc(ctx context.Context, config *Config) error {
 // mirrors is a list of mirror IDs defined in the configuration file
 // (or keys in c.Mirrors).  If mirrors is an empty list, all mirrors
 // will be updated.
-func Run(config *Config, mirrors []string) error {
+func Run(config *Config, mirrors []string, noPGPCheck bool) error {
 	lockFile := filepath.Join(config.Dir, lockFilename)
 	file, err := os.Open(lockFile)
 	switch {
@@ -122,14 +120,22 @@ func Run(config *Config, mirrors []string) error {
 	case err != nil:
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			slog.Warn("failed to close lock file", "error", err)
+		}
+	}()
 
 	fileLock := Flock{file}
 	err = fileLock.Lock()
 	if err != nil {
 		return err
 	}
-	defer fileLock.Unlock()
+	defer func() {
+		if err := fileLock.Unlock(); err != nil {
+			slog.Warn("failed to unlock file", "error", err)
+		}
+	}()
 
 	if len(mirrors) == 0 {
 		for mirrorID := range config.Mirrors {
@@ -139,7 +145,7 @@ func Run(config *Config, mirrors []string) error {
 
 	group, ctx := errgroup.WithContext(context.Background())
 	group.Go(func() error {
-		err := updateMirrors(ctx, config, mirrors)
+		err := updateMirrors(ctx, config, mirrors, noPGPCheck)
 		if err != nil {
 			if gcErr := gc(ctx, config); gcErr != nil {
 				err = errors.Wrap(err, gcErr.Error())

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/cybozu-go/aptutil/apt"
 	"github.com/cockroachdb/errors"
+	"github.com/cybozu-go/aptutil/apt"
 )
 
 const (
@@ -66,7 +66,11 @@ func (s *Storage) Load() error {
 	case err != nil:
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			// Don't use slog here as it may not be initialized yet
+		}
+	}()
 
 	jd := json.NewDecoder(f)
 	err = jd.Decode(&s.info)
@@ -94,7 +98,11 @@ func (s *Storage) Save() error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			// Don't use slog here as it may not be initialized yet
+		}
+	}()
 
 	enc := json.NewEncoder(f)
 	err = enc.Encode(s.info)
@@ -127,7 +135,7 @@ func (s *Storage) StoreLink(fi *apt.FileInfo, fullpath string) error {
 	fp := filepath.Join(s.dir, s.prefix, filepath.Clean(p))
 	d := filepath.Dir(fp)
 
-	err := os.MkdirAll(d, 0755)
+	err := os.MkdirAll(d, 0750)
 	if err != nil {
 		return err
 	}
@@ -172,7 +180,7 @@ func (s *Storage) StoreLinkWithHash(fi *apt.FileInfo, fullpath string) error {
 
 	for _, fp := range fpl {
 		d := filepath.Dir(fp)
-		err := os.MkdirAll(d, 0755)
+		err := os.MkdirAll(d, 0750)
 		if err != nil {
 			return errors.Wrap(err, "StoreLinkWithHash: "+fp)
 		}
