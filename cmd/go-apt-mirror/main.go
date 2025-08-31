@@ -28,34 +28,36 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "go-apt-mirror [mirror-ids...]",
+	Use:   "go-apt-mirror",
 	Short: "Mirror Debian package repositories",
 	Long: `go-apt-mirror is a tool for creating and maintaining mirrors of Debian package repositories.
 
-go-apt-mirror securely mirrors Debian package repositories.
+Find more information at: https://tbd.websitename.xyz`,
+}
 
-Find more information at: https://tbd.websitename.xyz
+var syncCmd = &cobra.Command{
+	Use:   "sync [mirror-ids...]",
+	Short: "Synchronize one or more APT repositories",
+	Long: `Synchronizes one or more APT repositories based on the provided configuration.
 
 Usage:
-  # Syncronize all repositories in your configuration file
-  go-apt-mirror
+  # Synchronize all repositories in your configuration file
+  go-apt-mirror sync
 
-  # Mirror only specific repositories
-  go-apt-mirror ubuntu security
+  # Synchronize only specific repositories
+  go-apt-mirror sync ubuntu security
 
-  # Use custom configuration file
-  go-apt-mirror --config /path/to/custom-location.toml
+  # Use a custom configuration file
+  go-apt-mirror sync --config /path/to/custom-location.toml
 
-  # Override log level (debug, info, warn, error)
-  go-apt-mirror --log-level debug
+  # Override the log level
+  go-apt-mirror sync --log-level debug
 
   # Show detailed error information
-  go-apt-mirror --verbose-errors
+  go-apt-mirror sync --verbose-errors
 
-By default, the application looks for a configuration file at /etc/apt/mirror.toml.
-The log level can be overridden from the command line, taking precedence over the configuration file setting.
-
-See the website for further examples and documentation.`,
+If no mirror IDs are specified, all repositories in the configuration file will be
+synchronized.`,
 	Run: runMirror,
 }
 
@@ -71,6 +73,7 @@ var versionCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", defaultConfigPath, "configuration file path")
@@ -82,6 +85,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("no-pgp-check", false, "disable PGP signature verification")
 	rootCmd.PersistentFlags().Bool("verbose-errors", false, "show detailed error information including stack traces")
 }
+
 
 // formatError returns a human-friendly error message, optionally with stack trace
 func formatError(err error, verbose bool) string {
@@ -110,8 +114,12 @@ func runMirror(cmd *cobra.Command, args []string) {
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 
 	config := mirror.NewConfig()
-	metadata, err := toml.DecodeFile(configPath, config)
-	if err != nil {
+	if _, err := toml.DecodeFile(configPath, config); err != nil {
+		if os.IsNotExist(err) {
+			slog.Error("configuration file not found", "path", configPath)
+			slog.Info("Please create a configuration file at the default location or specify one with the --config flag.")
+			os.Exit(1)
+		}
 		errorMsg := formatError(err, verboseErrors)
 		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
 		if !verboseErrors {
@@ -119,14 +127,9 @@ func runMirror(cmd *cobra.Command, args []string) {
 		}
 		os.Exit(1)
 	}
-	if len(metadata.Undecoded()) > 0 {
-		slog.Error("invalid config keys", "keys", fmt.Sprintf("%#v", metadata.Undecoded()))
-		os.Exit(1)
-	}
 
 	// Apply log configuration immediately after config loading
-	err = config.Log.Apply()
-	if err != nil {
+	if err := config.Log.Apply(); err != nil {
 		slog.Error("failed to apply log config", "error", err)
 		os.Exit(1)
 	}
@@ -134,8 +137,7 @@ func runMirror(cmd *cobra.Command, args []string) {
 	// Override log level if specified on command line
 	if logLevel != "" {
 		config.Log.Level = logLevel
-		err = config.Log.Apply()
-		if err != nil {
+		if err := config.Log.Apply(); err != nil {
 			slog.Error("failed to apply command-line log level", "level", logLevel, "error", err)
 			os.Exit(1)
 		}
@@ -144,8 +146,7 @@ func runMirror(cmd *cobra.Command, args []string) {
 
 	noPGPCheck, _ := cmd.Flags().GetBool("no-pgp-check")
 
-	err = mirror.Run(config, args, noPGPCheck)
-	if err != nil {
+	if err := mirror.Run(config, args, noPGPCheck); err != nil {
 		errorMsg := formatError(err, verboseErrors)
 		if verboseErrors {
 			slog.Error("mirror run failed", "error", errorMsg)

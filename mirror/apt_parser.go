@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 
@@ -96,9 +97,11 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool)
 	downloaded := make(map[string]*dlResult)
 	var allFileInfos []*apt.FileInfo
 	var processedOne bool
+	var downloadErrors []error
 
 	for result := range results {
 		if result.err != nil {
+			downloadErrors = append(downloadErrors, result.err)
 			slog.Warn("failed to download release file", "repo", p.mirrorID, "path", result.path, "error", result.err)
 			if result.tempfile != nil {
 				closeAndRemoveFile(result.tempfile)
@@ -107,6 +110,8 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool)
 		}
 
 		if result.status != 200 {
+			err := errors.Newf("unexpected status code %d for %s", result.status, result.path)
+			downloadErrors = append(downloadErrors, err)
 			if result.tempfile != nil {
 				closeAndRemoveFile(result.tempfile)
 			}
@@ -168,6 +173,9 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool)
 	}
 
 	if len(downloaded) == 0 {
+		if len(downloadErrors) > 0 {
+			return nil, nil, errors.Wrap(errors.Join(downloadErrors...), "failed to download Release/InRelease")
+		}
 		return nil, nil, errors.New("failed to download Release/InRelease")
 	}
 
@@ -316,6 +324,19 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 			// It's a clear-signed message
 			_, err = openpgp.CheckDetachedSignature(keyring, bytes.NewReader(block.Bytes), block.ArmoredSignature.Body)
 			if err != nil {
+				// Check if this is a BSN Pgp compatibility issue with golang.org/x/crypto/openpgp
+				if strings.Contains(err.Error(), "tag byte does not have MSB set") ||
+					strings.Contains(err.Error(), "invalid data") {
+					slog.Warn("Go openpgp library cannot parse BSN Pgp signature, attempting external gpg verification",
+						"repo", m.id, "suite", suite, "error", err)
+					
+					// Fallback to external GPG verification for BSN Pgp signatures
+					if fallbackErr := p.verifyWithExternalGPG(m, suite, inReleaseBytes); fallbackErr != nil {
+						return errors.Wrapf(fallbackErr, "PGP signature verification failed for InRelease file in repo '%s': both Go openpgp and external gpg verification failed", m.id)
+					}
+					slog.Info("PGP signature for InRelease verified using external gpg", "repo", m.id, "suite", suite)
+					return nil
+				}
 				return errors.Wrapf(err, "PGP signature verification failed for clear-signed InRelease file in repo '%s'", m.id)
 			}
 			slog.Info("PGP signature for clear-signed InRelease is valid", "repo", m.id, "suite", suite)
@@ -351,6 +372,19 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 
 		_, err = openpgp.CheckDetachedSignature(keyring, releaseResult.tempfile, releaseGPGResult.tempfile)
 		if err != nil {
+			// Check if this is a BSN Pgp compatibility issue with golang.org/x/crypto/openpgp
+			if strings.Contains(err.Error(), "tag byte does not have MSB set") ||
+				strings.Contains(err.Error(), "invalid data") {
+				slog.Warn("Go openpgp library cannot parse BSN Pgp signature, attempting external gpg verification",
+					"repo", m.id, "suite", suite, "error", err)
+				
+				// Fallback to external GPG verification for BSN Pgp signatures
+				if fallbackErr := p.verifyDetachedWithExternalGPG(m, suite, releaseResult.tempfile.Name(), releaseGPGResult.tempfile.Name()); fallbackErr != nil {
+					return errors.Wrapf(fallbackErr, "PGP signature verification failed for Release file in repo '%s': both Go openpgp and external gpg verification failed", m.id)
+				}
+				slog.Info("PGP signature for Release verified using external gpg", "repo", m.id, "suite", suite)
+				return nil
+			}
 			return errors.Wrapf(err, "PGP signature verification failed for Release file in repo '%s'", m.id)
 		}
 		slog.Info("PGP signature for Release is valid", "repo", m.id, "suite", suite)
@@ -358,4 +392,98 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 	}
 
 	return errors.Newf("PGP verification failed for repo '%s': no valid signed file found (checked InRelease, Release+Release.gpg)", m.id)
+}
+
+// verifyWithExternalGPG attempts to verify a PGP signature using external gpg command
+// This is a fallback for BSN Pgp signatures that the Go openpgp library cannot parse
+func (p *APTParser) verifyWithExternalGPG(m *Mirror, suite string, signedData []byte) error {
+	// Check if gpg is available
+	if _, err := exec.LookPath("gpg"); err != nil {
+		return errors.Wrap(err, "gpg command not found, cannot perform external verification")
+	}
+
+	// Create a temporary file for the signed data
+	tempFile, err := os.CreateTemp("", "inrelease-*.tmp")
+	if err != nil {
+		return errors.Wrap(err, "failed to create temporary file for gpg verification")
+	}
+	defer func() {
+		tempFile.Close()
+		os.Remove(tempFile.Name())
+	}()
+
+	// Write the signed data to the temporary file
+	if _, err := tempFile.Write(signedData); err != nil {
+		return errors.Wrap(err, "failed to write data to temporary file")
+	}
+	if err := tempFile.Close(); err != nil {
+		return errors.Wrap(err, "failed to close temporary file")
+	}
+
+	// Import the keyring to a temporary GPG home directory
+	tempGPGHome, err := os.MkdirTemp("", "gpg-home-*")
+	if err != nil {
+		return errors.Wrap(err, "failed to create temporary GPG home directory")
+	}
+	defer os.RemoveAll(tempGPGHome)
+
+	// Import the keyring
+	importCmd := exec.Command("gpg", "--homedir", tempGPGHome, "--import", m.mc.PGPKeyPath)
+	importCmd.Stderr = nil // Suppress import output
+	if err := importCmd.Run(); err != nil {
+		return errors.Wrapf(err, "failed to import PGP key for external verification: %s", m.mc.PGPKeyPath)
+	}
+
+	// Verify the signature
+	verifyCmd := exec.Command("gpg", "--homedir", tempGPGHome, "--verify", tempFile.Name())
+	output, err := verifyCmd.CombinedOutput()
+	if err != nil {
+		return errors.Wrapf(err, "external gpg verification failed: %s", string(output))
+	}
+
+	// Check if the output indicates a good signature
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "Good signature") {
+		return errors.Newf("external gpg verification did not report a good signature: %s", outputStr)
+	}
+
+	return nil
+}
+
+// verifyDetachedWithExternalGPG attempts to verify a detached PGP signature using external gpg command
+// This is a fallback for BSN Pgp signatures that the Go openpgp library cannot parse
+func (p *APTParser) verifyDetachedWithExternalGPG(m *Mirror, suite string, dataFile, sigFile string) error {
+	// Check if gpg is available
+	if _, err := exec.LookPath("gpg"); err != nil {
+		return errors.Wrap(err, "gpg command not found, cannot perform external verification")
+	}
+
+	// Import the keyring to a temporary GPG home directory
+	tempGPGHome, err := os.MkdirTemp("", "gpg-home-*")
+	if err != nil {
+		return errors.Wrap(err, "failed to create temporary GPG home directory")
+	}
+	defer os.RemoveAll(tempGPGHome)
+
+	// Import the keyring
+	importCmd := exec.Command("gpg", "--homedir", tempGPGHome, "--import", m.mc.PGPKeyPath)
+	importCmd.Stderr = nil // Suppress import output
+	if err := importCmd.Run(); err != nil {
+		return errors.Wrapf(err, "failed to import PGP key for external verification: %s", m.mc.PGPKeyPath)
+	}
+
+	// Verify the detached signature
+	verifyCmd := exec.Command("gpg", "--homedir", tempGPGHome, "--verify", sigFile, dataFile)
+	output, err := verifyCmd.CombinedOutput()
+	if err != nil {
+		return errors.Wrapf(err, "external gpg verification failed: %s", string(output))
+	}
+
+	// Check if the output indicates a good signature
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "Good signature") {
+		return errors.Newf("external gpg verification did not report a good signature: %s", outputStr)
+	}
+
+	return nil
 }
