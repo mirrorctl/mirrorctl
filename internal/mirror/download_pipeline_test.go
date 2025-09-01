@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cybozu-go/aptutil/apt"
+	"github.com/cybozu-go/aptutil/internal/apt"
 )
 
 // DownloadTestServer provides a mock HTTP server for testing download functionality

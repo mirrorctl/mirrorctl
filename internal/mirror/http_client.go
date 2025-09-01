@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cybozu-go/aptutil/apt"
+	"github.com/cybozu-go/aptutil/internal/apt"
 	"golang.org/x/sync/errgroup"
 	"log/slog"
 )

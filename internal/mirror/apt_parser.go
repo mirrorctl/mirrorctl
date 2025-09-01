@@ -9,7 +9,7 @@ import (
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
 	"github.com/cockroachdb/errors"
-	"github.com/cybozu-go/aptutil/apt"
+	"github.com/cybozu-go/aptutil/internal/apt"
 	"log/slog"
 )
 

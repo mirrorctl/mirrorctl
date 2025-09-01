@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cybozu-go/aptutil/apt"
+	"github.com/cybozu-go/aptutil/internal/apt"
 )
 
 const (
