@@ -171,16 +171,40 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool)
 		}
 	}
 
-	slog.Debug("download results summary", "repo", p.mirrorID,
-		"successful_downloads", len(downloaded), "download_errors", len(downloadErrors))
+	// Categorize errors by type
+	var notFoundErrors, actualErrors []error
+	for _, err := range downloadErrors {
+		if strings.Contains(err.Error(), "unexpected status code 404") {
+			notFoundErrors = append(notFoundErrors, err)
+		} else {
+			actualErrors = append(actualErrors, err)
+		}
+	}
+
+	slog.Debug("download results summary", "repo", p.mirrorID, 
+		"successful_downloads", len(downloaded), 
+		"not_found_variants", len(notFoundErrors),
+		"actual_errors", len(actualErrors))
+
+	if len(notFoundErrors) > 0 {
+		slog.Debug("some release file variants not available (expected)", "repo", p.mirrorID, "count", len(notFoundErrors))
+	}
 
 	if len(downloaded) == 0 {
-		if len(downloadErrors) > 0 {
-			slog.Error("all release file downloads failed", "repo", p.mirrorID, "errors", downloadErrors)
-			return nil, nil, errors.Wrap(errors.Join(downloadErrors...), "failed to download Release/InRelease")
+		if len(actualErrors) > 0 {
+			slog.Error("all release file downloads failed with errors", "repo", p.mirrorID, "errors", actualErrors)
+			return nil, nil, errors.Wrap(errors.Join(actualErrors...), "failed to download Release/InRelease")
+		} else if len(notFoundErrors) > 0 {
+			slog.Error("no release files found - all variants returned 404", "repo", p.mirrorID, "tried", len(notFoundErrors))
+			return nil, nil, errors.Wrap(errors.Join(notFoundErrors...), "no Release/InRelease files available")
+		} else {
+			slog.Error("no release files downloaded and no errors reported", "repo", p.mirrorID)
+			return nil, nil, errors.New("failed to download Release/InRelease")
 		}
-		slog.Error("no release files downloaded and no errors reported", "repo", p.mirrorID)
-		return nil, nil, errors.New("failed to download Release/InRelease")
+	}
+
+	if len(actualErrors) > 0 {
+		slog.Warn("some release file downloads failed", "repo", p.mirrorID, "errors", actualErrors)
 	}
 
 	return allFileInfos, downloaded, nil
