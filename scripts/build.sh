@@ -48,12 +48,9 @@ XC_ARCH="${XC_ARCH:-$(go env GOARCH)}"
 
 echo "Building ${TARGET} ${VERSION} (${GIT_COMMIT}) built at ${BUILD_DATE}..."
 
-# Create output directory
-mkdir -p "pkg/${TARGET}_${XC_OS}_${XC_ARCH}"
-
 # Build with version information injected via ldflags
 GOOS="${XC_OS}" GOARCH="${XC_ARCH}" go build \
     ${VERBOSE} \
     -ldflags "-X main.version=${VERSION} -X main.commit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" \
-    -o "pkg/${TARGET}_${XC_OS}_${XC_ARCH}/${TARGET}" \
+    -o "bin/${TARGET}" \
     ./cmd/${TARGET}
