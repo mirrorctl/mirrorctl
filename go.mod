@@ -9,6 +9,7 @@ require (
 require (
 	github.com/ProtonMail/gopenpgp/v3 v3.3.0
 	github.com/cockroachdb/errors v1.12.0
+	github.com/knqyf263/go-deb-version v0.0.0-20241115132648-6f4aee6ccd23
 	github.com/spf13/cobra v1.9.1
 )
 

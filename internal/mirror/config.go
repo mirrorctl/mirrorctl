@@ -49,6 +49,15 @@ type MirrConfig struct {
 
 	PGPKeyPath string `toml:"pgp_key_path,omitempty"`
 	NoPGPCheck bool   `toml:"no_pgp_check,omitempty"`
+
+	// Package filtering configuration
+	Filters *PackageFilters `toml:"filters,omitempty"`
+}
+
+// PackageFilters defines filtering rules for packages
+type PackageFilters struct {
+	KeepVersions    int      `toml:"keep_versions,omitempty"`
+	ExcludePatterns []string `toml:"exclude_patterns,omitempty"`
 }
 
 // isFlat returns true if suite ends with "/" as described in

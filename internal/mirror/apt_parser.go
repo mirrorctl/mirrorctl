@@ -5,11 +5,14 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
 	"github.com/cockroachdb/errors"
 	"github.com/cybozu-go/aptutil/internal/apt"
+	"github.com/knqyf263/go-deb-version"
 	"log/slog"
 )
 
@@ -306,8 +309,11 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 		return nil, nil
 	}
 
+	// Apply package filtering if configured
+	filteredItemMap := p.applyPackageFilters(itemMap)
+
 	var items []*apt.FileInfo
-	for _, fi := range itemMap {
+	for _, fi := range filteredItemMap {
 		items = append(items, fi)
 	}
 
@@ -417,4 +423,148 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 	}
 
 	return errors.Newf("PGP verification failed for repo '%s': no valid signed file found (checked InRelease, Release+Release.gpg)", m.id)
+}
+
+// packageNameVersion holds parsed package name and version from filename
+type packageNameVersion struct {
+	name    string
+	version string
+}
+
+// parsePackageNameVersion extracts package name and version from a .deb filename
+func parsePackageNameVersion(filePath string) packageNameVersion {
+	filename := path.Base(filePath)
+	
+	// Check if it's a .deb file
+	if !strings.HasSuffix(filename, ".deb") {
+		return packageNameVersion{}
+	}
+	
+	// Remove .deb extension
+	nameVersionArch := strings.TrimSuffix(filename, ".deb")
+	
+	// Split by underscores: name_version_architecture
+	parts := strings.Split(nameVersionArch, "_")
+	if len(parts) < 3 {
+		return packageNameVersion{}
+	}
+	
+	name := parts[0]
+	// Version is everything between name and architecture
+	version := strings.Join(parts[1:len(parts)-1], "_")
+	
+	return packageNameVersion{
+		name:    name,
+		version: version,
+	}
+}
+
+// applyPackageFilters filters packages based on configured rules
+func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[string]*apt.FileInfo {
+	if p.config.Filters == nil {
+		slog.Debug("no package filters configured", "repo", p.mirrorID)
+		return itemMap // No filtering configured
+	}
+
+	slog.Debug("applying package filters", "repo", p.mirrorID,
+		"keep_versions", p.config.Filters.KeepVersions,
+		"exclude_patterns", len(p.config.Filters.ExcludePatterns),
+		"total_items", len(itemMap))
+
+	// Group packages by name from filename
+	packages := make(map[string][]*apt.FileInfo)
+	skippedFiles := 0
+	
+	for filePath, fileInfo := range itemMap {
+		// Parse package name and version from filename
+		nameVersion := parsePackageNameVersion(filePath)
+		if nameVersion.name == "" {
+			skippedFiles++
+			continue // Not a package file
+		}
+
+		// Check exclude patterns
+		if p.shouldExcludePackageByName(nameVersion.name, nameVersion.version) {
+			slog.Debug("excluding package by pattern", "repo", p.mirrorID,
+				"package", nameVersion.name, "version", nameVersion.version)
+			continue
+		}
+
+		packages[nameVersion.name] = append(packages[nameVersion.name], fileInfo)
+	}
+	
+	slog.Debug("package grouping results", "repo", p.mirrorID,
+		"total_files", len(itemMap), "skipped_files", skippedFiles, 
+		"unique_packages", len(packages))
+
+	// Apply version filtering
+	filteredMap := make(map[string]*apt.FileInfo)
+	totalPackages := 0
+	keptPackages := 0
+
+	for packageName, versions := range packages {
+		totalPackages += len(versions)
+
+		// Sort versions in descending order (newest first)
+		sort.Slice(versions, func(i, j int) bool {
+			nv1 := parsePackageNameVersion(versions[i].Path())
+			nv2 := parsePackageNameVersion(versions[j].Path())
+
+			v1, err1 := version.NewVersion(nv1.version)
+			v2, err2 := version.NewVersion(nv2.version)
+
+			if err1 != nil || err2 != nil {
+				// Fallback to string comparison if version parsing fails
+				return nv1.version > nv2.version
+			}
+
+			return v1.GreaterThan(v2)
+		})
+
+		// Keep only the specified number of versions
+		keepCount := len(versions)
+		if p.config.Filters.KeepVersions > 0 && p.config.Filters.KeepVersions < len(versions) {
+			keepCount = p.config.Filters.KeepVersions
+		}
+
+		for i := 0; i < keepCount; i++ {
+			pkg := versions[i]
+			filteredMap[pkg.Path()] = pkg
+			keptPackages++
+		}
+
+		if len(versions) > keepCount {
+			slog.Debug("filtered package versions", "repo", p.mirrorID,
+				"package", packageName, "total_versions", len(versions), 
+				"kept_versions", keepCount)
+		}
+	}
+
+	slog.Info("package filtering complete", "repo", p.mirrorID,
+		"total_packages", totalPackages, "kept_packages", keptPackages,
+		"filtered_out", totalPackages-keptPackages)
+
+	return filteredMap
+}
+
+// shouldExcludePackageByName checks if a package should be excluded based on patterns
+func (p *APTParser) shouldExcludePackageByName(name, version string) bool {
+	if p.config.Filters.ExcludePatterns == nil {
+		return false
+	}
+
+	fullName := name + "_" + version
+	for _, pattern := range p.config.Filters.ExcludePatterns {
+		if matched, _ := filepath.Match(pattern, name); matched {
+			return true
+		}
+		if matched, _ := filepath.Match(pattern, version); matched {
+			return true
+		}
+		if matched, _ := filepath.Match(pattern, fullName); matched {
+			return true
+		}
+	}
+
+	return false
 }
