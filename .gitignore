@@ -20,3 +20,4 @@ pkg/
 
 # Ignore go.sum
 /go.sum
+bin
