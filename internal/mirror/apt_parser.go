@@ -370,7 +370,7 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 			return errors.Wrapf(sigErr, "PGP signature verification failed for InRelease file in repo '%s'", m.id)
 		}
 		
-		slog.Info("PGP signature for clear-signed InRelease is valid", "repo", m.id, "suite", suite)
+		slog.Info("PGP signature for clear-signed InRelease is valid", "repo", m.id, "suite", suite, "key_id", publicKey.GetHexKeyID())
 		return nil
 	}
 
@@ -412,7 +412,7 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 			return errors.Wrapf(sigErr, "PGP signature verification failed for Release file in repo '%s'", m.id)
 		}
 		
-		slog.Info("PGP signature for Release is valid", "repo", m.id, "suite", suite)
+		slog.Info("PGP signature for Release is valid", "repo", m.id, "suite", suite, "key_id", publicKey.GetHexKeyID())
 		return nil
 	}
 
