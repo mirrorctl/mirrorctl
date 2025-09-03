@@ -146,7 +146,16 @@ RETRY:
 		r.err = err
 		return
 	}
-	fi2, err := apt.CopyWithFileInfo(tempfile, resp.Body, p)
+	// Wrap response body with progress tracking if progress bar is available
+	var reader io.Reader = resp.Body
+	if bar != nil {
+		reader = &progressReader{
+			reader: resp.Body,
+			bar:    bar,
+		}
+	}
+
+	fi2, err := apt.CopyWithFileInfo(tempfile, reader, p)
 	if err != nil {
 		if retries < httpRetries {
 			retries++
@@ -180,11 +189,6 @@ RETRY:
 	if err != nil {
 		r.err = errors.New("tempfile.Seek failed")
 		return
-	}
-
-	// Update progress bar for downloaded file
-	if bar != nil {
-		bar.Add64(int64(fi2.Size()))
 	}
 
 	r.fi = fi2
@@ -335,6 +339,21 @@ func (h *HTTPClient) countReusableFiles(fil []*apt.FileInfo, byhash bool) (reusa
 		}
 	}
 	return reusableCount, needDownloadCount
+}
+
+// progressReader wraps an io.Reader and updates a progress bar as data is read
+type progressReader struct {
+	reader io.Reader
+	bar    *pb.ProgressBar
+}
+
+// Read implements io.Reader and updates the progress bar
+func (pr *progressReader) Read(p []byte) (n int, err error) {
+	n, err = pr.reader.Read(p)
+	if n > 0 && pr.bar != nil {
+		pr.bar.Add(n)
+	}
+	return n, err
 }
 
 // storeLink stores a file in the storage system
