@@ -84,8 +84,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("help", "h", false, "help for go-apt-mirror")
 	rootCmd.PersistentFlags().Bool("no-pgp-check", false, "disable PGP signature verification")
 	rootCmd.PersistentFlags().Bool("verbose-errors", false, "show detailed error information including stack traces")
+	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "suppress all output except for errors")
 }
-
 
 // formatError returns a human-friendly error message, optionally with stack trace
 func formatError(err error, verbose bool) string {
@@ -144,9 +144,18 @@ func runMirror(cmd *cobra.Command, args []string) {
 		slog.Debug("log level successfully overridden from command line", "level", logLevel)
 	}
 
+	quiet, _ := cmd.Flags().GetBool("quiet")
+	if quiet {
+		config.Log.Level = "error"
+		if err := config.Log.Apply(); err != nil {
+			slog.Error("failed to apply quiet log level", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	noPGPCheck, _ := cmd.Flags().GetBool("no-pgp-check")
 
-	if err := mirror.Run(config, args, noPGPCheck); err != nil {
+	if err := mirror.Run(config, args, noPGPCheck, quiet); err != nil {
 		errorMsg := formatError(err, verboseErrors)
 		if verboseErrors {
 			slog.Error("mirror run failed", "error", errorMsg)
