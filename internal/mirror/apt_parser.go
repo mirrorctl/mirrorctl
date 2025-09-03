@@ -335,10 +335,10 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 		totalSize += fi.Size()
 	}
 
-	// Create progress bar with faster refresh rate to show intermediate progress
+	// Create progress bar with visual bar display
 	bar := pb.New64(int64(totalSize))
 	bar.Set(pb.Bytes, true)
-	bar.SetTemplateString(`[{{string . "repo"}}] {{counters . }} {{percent . }} {{speed . }}`)
+	bar.SetTemplateString(`[{{string . "repo"}}] {{counters . }} {{bar . }} {{percent . }} {{speed . }}`)
 	bar.Set("repo", p.mirrorID)
 	bar.SetWriter(os.Stderr)
 	bar.SetRefreshRate(time.Millisecond * 500) // Update every 500ms to show intermediate progress
