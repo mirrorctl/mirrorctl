@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/cheggaaa/pb/v3"
 	"github.com/cockroachdb/errors"
 	"github.com/cybozu-go/aptutil/internal/apt"
 	"golang.org/x/sync/errgroup"
@@ -52,7 +53,7 @@ type dlResult struct {
 
 // download is a goroutine to download an item.
 func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrConfig,
-	p string, fi *apt.FileInfo, byhash bool, ch chan<- *dlResult) {
+	p string, fi *apt.FileInfo, byhash bool, ch chan<- *dlResult, bar *pb.ProgressBar) {
 	var tempfile *os.File
 	r := &dlResult{
 		path: p,
@@ -129,7 +130,6 @@ RETRY:
 	}
 	defer closeRespBody(resp)
 
-
 	r.status = resp.StatusCode
 	if r.status >= 500 && retries < httpRetries {
 		slog.Debug("server error, retrying", "repo", h.mirrorID, "path", p, "status", r.status, "attempt", retries+1)
@@ -181,19 +181,25 @@ RETRY:
 		r.err = errors.New("tempfile.Seek failed")
 		return
 	}
+
+	// Update progress bar for downloaded file
+	if bar != nil {
+		bar.Add64(int64(fi2.Size()))
+	}
+
 	r.fi = fi2
 }
 
 // downloadFiles downloads a list of files concurrently
 func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig,
-	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
+	fil []*apt.FileInfo, allowMissing, byhash bool, bar *pb.ProgressBar) ([]*apt.FileInfo, error) {
 	results := make(chan *dlResult, len(fil))
 	var reused, downloaded []*apt.FileInfo
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
-		reused, err = h.reuseOrDownload(ctx, mirrorConfig, fil, byhash, results)
+		reused, err = h.reuseOrDownload(ctx, mirrorConfig, fil, byhash, results, bar)
 		return err
 	})
 	g.Go(func() error {
@@ -206,7 +212,10 @@ func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig
 		return nil, err
 	}
 
-	slog.Info("stats", "repo", h.mirrorID, "total", len(fil), "reused", len(reused), "downloaded", len(downloaded))
+	// Only log stats if no progress bar is active (to avoid interference)
+	if bar == nil {
+		slog.Info("stats", "repo", h.mirrorID, "total", len(fil), "reused", len(reused), "downloaded", len(downloaded))
+	}
 	slog.Debug("download complete", "repo", h.mirrorID, "reused_files", len(reused), "new_downloads", len(downloaded))
 
 	// reused has enough capacity.  See reuseOrDownload.
@@ -215,7 +224,7 @@ func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig
 
 // reuseOrDownload checks for existing files and downloads missing ones
 func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConfig, fil []*apt.FileInfo,
-	byhash bool, results chan<- *dlResult) ([]*apt.FileInfo, error) {
+	byhash bool, results chan<- *dlResult, bar *pb.ProgressBar) ([]*apt.FileInfo, error) {
 	// environment to manage downloading goroutines.
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -236,10 +245,17 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConf
 		if h.current != nil {
 			localfi, fullpath := h.current.Lookup(fi, byhash)
 			if localfi != nil {
-				slog.Debug("reusing existing file", "repo", h.mirrorID, "path", fi.Path())
+				// Only log debug messages when no progress bar is active
+				if bar == nil {
+					slog.Debug("reusing existing file", "repo", h.mirrorID, "path", fi.Path())
+				}
 				err := h.storeLink(localfi, fullpath, byhash)
 				if err != nil {
 					return nil, errors.Wrap(err, "storeLink")
+				}
+				// Update progress bar for reused file
+				if bar != nil {
+					bar.Add64(int64(localfi.Size()))
 				}
 				reused = append(reused, localfi)
 				continue
@@ -253,7 +269,7 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConf
 		}
 
 		g.Go(func() error {
-			h.download(ctx, mirrorConfig, fi.Path(), fi, byhash, results)
+			h.download(ctx, mirrorConfig, fi.Path(), fi, byhash, results, bar)
 			return nil
 		})
 	}
@@ -302,6 +318,23 @@ func (h *HTTPClient) recvResult(allowMissing, byhash bool, results <-chan *dlRes
 		}
 	}
 	return fil, nil
+}
+
+// countReusableFiles counts how many files can be reused vs need downloading
+func (h *HTTPClient) countReusableFiles(fil []*apt.FileInfo, byhash bool) (reusableCount, needDownloadCount int) {
+	if h.current == nil {
+		return 0, len(fil)
+	}
+
+	for _, fi := range fil {
+		localfi, _ := h.current.Lookup(fi, byhash)
+		if localfi != nil {
+			reusableCount++
+		} else {
+			needDownloadCount++
+		}
+	}
+	return reusableCount, needDownloadCount
 }
 
 // storeLink stores a file in the storage system

@@ -2,14 +2,17 @@ package mirror
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
+	"github.com/cheggaaa/pb/v3"
 	"github.com/cockroachdb/errors"
 	"github.com/cybozu-go/aptutil/internal/apt"
 	"github.com/knqyf263/go-deb-version"
@@ -184,8 +187,8 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool)
 		}
 	}
 
-	slog.Debug("download results summary", "repo", p.mirrorID, 
-		"successful_downloads", len(downloaded), 
+	slog.Debug("download results summary", "repo", p.mirrorID,
+		"successful_downloads", len(downloaded),
 		"not_found_variants", len(notFoundErrors),
 		"actual_errors", len(actualErrors))
 
@@ -228,7 +231,7 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 			return nil, false, ctx.Err()
 		case <-httpClient.semaphore:
 		}
-		go httpClient.download(ctx, p.config, path, nil, false, results)
+		go httpClient.download(ctx, p.config, path, nil, false, results, nil)
 	}
 
 	// Close results channel after all goroutines complete
@@ -290,7 +293,7 @@ func (p *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
 		return nil, nil
 	}
 
-	return httpClient.downloadFiles(ctx, p.config, indices, false, byhash)
+	return httpClient.downloadFiles(ctx, p.config, indices, false, byhash, nil)
 }
 
 // downloadItems downloads package files listed in the indices
@@ -317,7 +320,33 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 		items = append(items, fi)
 	}
 
-	return httpClient.downloadFiles(ctx, p.config, items, true, byhash)
+	// Check if we need to download files and show progress bar accordingly
+	reusableCount, needDownloadCount := httpClient.countReusableFiles(items, byhash)
+
+	if needDownloadCount == 0 {
+		// All files will be reused - no progress bar needed
+		slog.Info("all files up to date", "repo", p.mirrorID, "total", len(items), "reused", reusableCount)
+		return httpClient.downloadFiles(ctx, p.config, items, true, byhash, nil)
+	}
+
+	// Some files need downloading - show progress bar
+	var totalSize uint64
+	for _, fi := range items {
+		totalSize += fi.Size()
+	}
+
+	// Create progress bar with custom configuration to minimize output
+	bar := pb.New64(int64(totalSize))
+	bar.Set(pb.Bytes, true)
+	bar.SetTemplateString(`[{{string . "repo"}}] {{counters . }} {{percent . }}`)
+	bar.Set("repo", p.mirrorID)
+	bar.SetWriter(os.Stderr)
+	bar.SetRefreshRate(time.Second * 2) // Update every 2 seconds to reduce spam
+	bar.Start()
+
+	defer bar.Finish()
+
+	return httpClient.downloadFiles(ctx, p.config, items, true, byhash, bar)
 }
 
 func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[string]*dlResult) error {
@@ -361,21 +390,21 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 		if err != nil {
 			return errors.Wrap(err, "failed to read InRelease tempfile")
 		}
-		
+
 		verifier, err := p.pgp.Verify().VerificationKey(publicKey).New()
 		if err != nil {
 			return errors.Wrap(err, "failed to create verifier")
 		}
-		
+
 		verifyResult, err := verifier.VerifyCleartext(inReleaseBytes)
 		if err != nil {
 			return errors.Wrapf(err, "PGP signature verification failed for InRelease file in repo '%s'", m.id)
 		}
-		
+
 		if sigErr := verifyResult.SignatureError(); sigErr != nil {
 			return errors.Wrapf(sigErr, "PGP signature verification failed for InRelease file in repo '%s'", m.id)
 		}
-		
+
 		slog.Info("PGP signature for clear-signed InRelease is valid", "repo", m.id, "suite", suite, "key_id", publicKey.GetHexKeyID())
 		return nil
 	}
@@ -408,16 +437,16 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 		if err != nil {
 			return errors.Wrap(err, "failed to create verifier")
 		}
-		
+
 		verifyResult, err := verifier.VerifyDetached(releaseBytes, sigBytes, crypto.Armor)
 		if err != nil {
 			return errors.Wrapf(err, "PGP signature verification failed for Release file in repo '%s'", m.id)
 		}
-		
+
 		if sigErr := verifyResult.SignatureError(); sigErr != nil {
 			return errors.Wrapf(sigErr, "PGP signature verification failed for Release file in repo '%s'", m.id)
 		}
-		
+
 		slog.Info("PGP signature for Release is valid", "repo", m.id, "suite", suite, "key_id", publicKey.GetHexKeyID())
 		return nil
 	}
@@ -434,25 +463,25 @@ type packageNameVersion struct {
 // parsePackageNameVersion extracts package name and version from a .deb filename
 func parsePackageNameVersion(filePath string) packageNameVersion {
 	filename := path.Base(filePath)
-	
+
 	// Check if it's a .deb file
 	if !strings.HasSuffix(filename, ".deb") {
 		return packageNameVersion{}
 	}
-	
+
 	// Remove .deb extension
 	nameVersionArch := strings.TrimSuffix(filename, ".deb")
-	
+
 	// Split by underscores: name_version_architecture
 	parts := strings.Split(nameVersionArch, "_")
 	if len(parts) < 3 {
 		return packageNameVersion{}
 	}
-	
+
 	name := parts[0]
 	// Version is everything between name and architecture
 	version := strings.Join(parts[1:len(parts)-1], "_")
-	
+
 	return packageNameVersion{
 		name:    name,
 		version: version,
@@ -474,7 +503,7 @@ func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[st
 	// Group packages by name from filename
 	packages := make(map[string][]*apt.FileInfo)
 	skippedFiles := 0
-	
+
 	for filePath, fileInfo := range itemMap {
 		// Parse package name and version from filename
 		nameVersion := parsePackageNameVersion(filePath)
@@ -492,9 +521,9 @@ func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[st
 
 		packages[nameVersion.name] = append(packages[nameVersion.name], fileInfo)
 	}
-	
+
 	slog.Debug("package grouping results", "repo", p.mirrorID,
-		"total_files", len(itemMap), "skipped_files", skippedFiles, 
+		"total_files", len(itemMap), "skipped_files", skippedFiles,
 		"unique_packages", len(packages))
 
 	// Apply version filtering
@@ -535,7 +564,7 @@ func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[st
 
 		if len(versions) > keepCount {
 			slog.Debug("filtered package versions", "repo", p.mirrorID,
-				"package", packageName, "total_versions", len(versions), 
+				"package", packageName, "total_versions", len(versions),
 				"kept_versions", keepCount)
 		}
 	}
@@ -567,4 +596,25 @@ func (p *APTParser) shouldExcludePackageByName(name, version string) bool {
 	}
 
 	return false
+}
+
+// formatBytes formats a byte count as a human-readable string
+func formatBytes(bytes uint64) string {
+	if bytes == 0 {
+		return "0 B"
+	}
+
+	units := []string{"B", "KiB", "MiB", "GiB", "TiB"}
+	size := float64(bytes)
+	unitIndex := 0
+
+	for size >= 1024 && unitIndex < len(units)-1 {
+		size /= 1024
+		unitIndex++
+	}
+
+	if unitIndex == 0 {
+		return fmt.Sprintf("%.0f %s", size, units[unitIndex])
+	}
+	return fmt.Sprintf("%.2f %s", size, units[unitIndex])
 }
