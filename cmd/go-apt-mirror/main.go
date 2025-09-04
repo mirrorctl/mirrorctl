@@ -75,9 +75,17 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var validateCmd = &cobra.Command{
+	Use:   "validate",
+	Short: "Validate the configuration file",
+	Long:  `Validate the configuration file and report any issues.`,
+	Run:   runValidate,
+}
+
 func init() {
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(validateCmd)
 
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", defaultConfigPath, "configuration file path")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "", "override log level (debug, info, warn, error)")
@@ -168,6 +176,50 @@ func runMirror(cmd *cobra.Command, args []string) {
 		}
 		os.Exit(1)
 	}
+}
+
+func runValidate(cmd *cobra.Command, args []string) {
+	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
+
+	config := mirror.NewConfig()
+	if _, err := toml.DecodeFile(configPath, config); err != nil {
+		if os.IsNotExist(err) {
+			slog.Error("configuration file not found", "path", configPath)
+			os.Exit(1)
+		}
+		errorMsg := formatError(err, verboseErrors)
+		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
+		os.Exit(1)
+	}
+
+	var validationErrors []error
+
+	if err := config.Log.Apply(); err != nil {
+		validationErrors = append(validationErrors, errors.Wrap(err, "log config"))
+	}
+
+	if err := config.Check(); err != nil {
+		validationErrors = append(validationErrors, errors.Wrap(err, "global config"))
+	}
+
+	for mirrorID, mirrorConfig := range config.Mirrors {
+		if !mirror.IsValidID(mirrorID) {
+			validationErrors = append(validationErrors, errors.New("invalid mirror ID: "+mirrorID))
+		}
+		if err := mirrorConfig.Check(); err != nil {
+			validationErrors = append(validationErrors, errors.Wrap(err, "mirror \""+mirrorID+"\""))
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		slog.Error("configuration validation failed")
+		for _, err := range validationErrors {
+			slog.Error(err.Error())
+		}
+		os.Exit(1)
+	}
+
+	slog.Info("configuration is valid")
 }
 
 func main() {

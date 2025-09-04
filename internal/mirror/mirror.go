@@ -23,6 +23,11 @@ var (
 	validID = regexp.MustCompile(`^[a-z0-9_-]+$`)
 )
 
+// IsValidID checks if the given ID is valid.
+func IsValidID(id string) bool {
+	return validID.MatchString(id)
+}
+
 // Mirror implements mirroring logics.
 type Mirror struct {
 	id         string
@@ -33,7 +38,7 @@ type Mirror struct {
 	httpClient *HTTPClient
 	parser     *APTParser
 	noPGPCheck bool
-	quiet bool
+	quiet      bool
 }
 
 // NewMirror constructs a Mirror for given mirror id.
@@ -45,7 +50,7 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 	}
 
 	// sanity checks
-	if !validID.MatchString(mirrorID) {
+	if !IsValidID(mirrorID) {
 		return nil, errors.New("invalid id: " + mirrorID)
 	}
 	if err := mirrorConfig.Check(); err != nil {
@@ -92,7 +97,7 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 		httpClient: httpClient,
 		parser:     parser,
 		noPGPCheck: noPGPCheck,
-		quiet: quiet,
+		quiet:      quiet,
 	}
 	return mirror, nil
 }
@@ -156,7 +161,6 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
-
 
 	if len(indexMap) == 0 {
 		return errors.New(m.id + ": found no Release/InRelease")

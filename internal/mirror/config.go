@@ -68,17 +68,30 @@ func isFlat(suite string) bool {
 
 // Check vaildates the configuration.
 func (mirrorConfig *MirrConfig) Check() error {
+	if mirrorConfig.URL.URL == nil {
+		return errors.New("url is not set")
+	}
 	if len(mirrorConfig.Suites) == 0 {
 		return errors.New("no suites")
 	}
 
 	flat := isFlat(mirrorConfig.Suites[0])
-	if flat && len(mirrorConfig.Sections) != 0 {
-		return errors.New("flat repository cannot have sections")
+	if flat {
+		if len(mirrorConfig.Sections) != 0 {
+			return errors.New("flat repository cannot have sections")
+		}
+		if len(mirrorConfig.Architectures) != 0 {
+			return errors.New("flat repository cannot have architectures")
+		}
+	} else {
+		if len(mirrorConfig.Sections) == 0 {
+			return errors.New("no sections")
+		}
+		if len(mirrorConfig.Architectures) == 0 {
+			return errors.New("no architectures")
+		}
 	}
-	if flat && len(mirrorConfig.Architectures) != 0 {
-		return errors.New("flat repository cannot have sections")
-	}
+
 	for _, suite := range mirrorConfig.Suites[1:] {
 		if flat != isFlat(suite) {
 			return errors.New("mixed flat/non-flat in suites")
@@ -87,6 +100,9 @@ func (mirrorConfig *MirrConfig) Check() error {
 
 	// PGP configuration validation
 	if !mirrorConfig.NoPGPCheck && mirrorConfig.PGPKeyPath != "" {
+		if !path.IsAbs(mirrorConfig.PGPKeyPath) {
+			return errors.New("pgp_key_path must be an absolute path")
+		}
 		if _, err := os.Stat(mirrorConfig.PGPKeyPath); os.IsNotExist(err) {
 			return errors.New("pgp_key_path does not exist: " + mirrorConfig.PGPKeyPath)
 		} else if err != nil {
@@ -234,7 +250,18 @@ type Config struct {
 	Dir      string                 `toml:"dir"`
 	MaxConns int                    `toml:"max_conns"`
 	Log      LogConfig              `toml:"log"`
-	Mirrors  map[string]*MirrConfig `toml:"mirror"`
+	Mirrors  map[string]*MirrConfig `toml:"mirrors"`
+}
+
+// Check validates the configuration.
+func (c *Config) Check() error {
+	if c.Dir == "" {
+		return errors.New("dir is not set")
+	}
+	if !path.IsAbs(c.Dir) {
+		return errors.New("dir must be an absolute path")
+	}
+	return nil
 }
 
 // NewConfig creates Config with default values.
