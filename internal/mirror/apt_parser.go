@@ -298,7 +298,7 @@ func (p *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
 
 // downloadItems downloads package files listed in the indices
 func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
-	indices []*apt.FileInfo, byhash bool) ([]*apt.FileInfo, error) {
+	indices []*apt.FileInfo, byhash, quiet bool) ([]*apt.FileInfo, error) {
 
 	indexMap := make(map[string][]*apt.FileInfo)
 	itemMap := make(map[string]*apt.FileInfo)
@@ -330,21 +330,24 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 	}
 
 	// Some files need downloading - show progress bar
-	var totalSize uint64
-	for _, fi := range items {
-		totalSize += fi.Size()
+	var bar *pb.ProgressBar
+	if !quiet {
+		var totalSize uint64
+		for _, fi := range items {
+			totalSize += fi.Size()
+		}
+
+		// Create progress bar with visual bar display
+		bar = pb.New64(int64(totalSize))
+		bar.Set(pb.Bytes, true)
+		bar.SetTemplateString(`[{{string . "repo"}}] {{counters . }} {{bar . }} {{percent . }} {{speed . }}`)
+		bar.Set("repo", p.mirrorID)
+		bar.SetWriter(os.Stderr)
+		bar.SetRefreshRate(time.Millisecond * 500) // Update every 500ms to show intermediate progress
+		bar.Start()
+
+		defer bar.Finish()
 	}
-
-	// Create progress bar with visual bar display
-	bar := pb.New64(int64(totalSize))
-	bar.Set(pb.Bytes, true)
-	bar.SetTemplateString(`[{{string . "repo"}}] {{counters . }} {{bar . }} {{percent . }} {{speed . }}`)
-	bar.Set("repo", p.mirrorID)
-	bar.SetWriter(os.Stderr)
-	bar.SetRefreshRate(time.Millisecond * 500) // Update every 500ms to show intermediate progress
-	bar.Start()
-
-	defer bar.Finish()
 
 	return httpClient.downloadFiles(ctx, p.config, items, true, byhash, bar)
 }

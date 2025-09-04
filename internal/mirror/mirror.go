@@ -33,10 +33,11 @@ type Mirror struct {
 	httpClient *HTTPClient
 	parser     *APTParser
 	noPGPCheck bool
+	quiet bool
 }
 
 // NewMirror constructs a Mirror for given mirror id.
-func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck bool) (*Mirror, error) {
+func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck, quiet bool) (*Mirror, error) {
 	directory := filepath.Clean(config.Dir)
 	mirrorConfig, ok := config.Mirrors[mirrorID]
 	if !ok {
@@ -91,6 +92,7 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck 
 		httpClient: httpClient,
 		parser:     parser,
 		noPGPCheck: noPGPCheck,
+		quiet: quiet,
 	}
 	return mirror, nil
 }
@@ -122,7 +124,7 @@ func (m *Mirror) Update(ctx context.Context) error {
 	itemMap := make(map[string]*apt.FileInfo)
 
 	for _, suite := range m.mc.Suites {
-		err := m.updateSuite(ctx, suite, itemMap)
+		err := m.updateSuite(ctx, suite, itemMap, m.quiet)
 		if err != nil {
 			return err
 		}
@@ -147,7 +149,7 @@ func (m *Mirror) Update(ctx context.Context) error {
 }
 
 // updateSuite partially updates mirror for a suite.
-func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[string]*apt.FileInfo) error {
+func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[string]*apt.FileInfo, quiet bool) error {
 	slog.Info("download Release/InRelease", "repo", m.id, "suite", suite)
 	slog.Debug("processing suite", "repo", m.id, "suite", suite, "sections", m.mc.Sections, "architectures", m.mc.Architectures)
 	indexMap, byhash, err := m.parser.downloadRelease(ctx, m.httpClient, suite, m)
@@ -188,7 +190,7 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 
 	// extract file information from indices and download items
 	slog.Debug("downloading package files", "repo", m.id, "suite", suite)
-	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash)
+	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash, quiet)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}

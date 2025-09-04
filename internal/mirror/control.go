@@ -15,12 +15,12 @@ const (
 	lockFilename = ".lock"
 )
 
-func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPCheck bool) error {
+func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPCheck, quiet bool) error {
 	timestamp := time.Now()
 
 	var mirrorList []*Mirror
 	for _, mirrorID := range mirrors {
-		mirror, err := NewMirror(timestamp, mirrorID, config, noPGPCheck)
+		mirror, err := NewMirror(timestamp, mirrorID, config, noPGPCheck, quiet)
 		if err != nil {
 			return err
 		}
@@ -107,7 +107,7 @@ func gc(ctx context.Context, config *Config) error {
 // mirrors is a list of mirror IDs defined in the configuration file
 // (or keys in c.Mirrors).  If mirrors is an empty list, all mirrors
 // will be updated.
-func Run(config *Config, mirrors []string, noPGPCheck bool) error {
+func Run(config *Config, mirrors []string, noPGPCheck, quiet bool) error {
 	lockFile := filepath.Join(config.Dir, lockFilename)
 	file, err := os.Open(lockFile)
 	switch {
@@ -145,7 +145,7 @@ func Run(config *Config, mirrors []string, noPGPCheck bool) error {
 
 	group, ctx := errgroup.WithContext(context.Background())
 	group.Go(func() error {
-		err := updateMirrors(ctx, config, mirrors, noPGPCheck)
+		err := updateMirrors(ctx, config, mirrors, noPGPCheck, quiet)
 		if err != nil {
 			if gcErr := gc(ctx, config); gcErr != nil {
 				err = errors.Wrap(err, gcErr.Error())

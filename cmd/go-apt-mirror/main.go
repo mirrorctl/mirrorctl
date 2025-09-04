@@ -56,6 +56,9 @@ Usage:
   # Show detailed error information
   go-apt-mirror sync --verbose-errors
 
+  # Suppress all output except for errors
+  go-apt-mirror sync --quiet
+
 If no mirror IDs are specified, all repositories in the configuration file will be
 synchronized.`,
 	Run: runMirror,
