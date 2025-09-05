@@ -24,7 +24,7 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient creates a new HTTP client for downloads
-func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Storage) *HTTPClient {
+func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Storage, tlsConfig *TLSConfig) *HTTPClient {
 	semaphore := make(chan struct{}, maxConns)
 
 	// Pre-fill the semaphore with tokens
@@ -33,7 +33,7 @@ func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Sto
 	}
 
 	return &HTTPClient{
-		client:    clonedTransport(),
+		client:    clonedTransport(tlsConfig),
 		semaphore: semaphore,
 		mirrorID:  mirrorID,
 		storage:   storage,
@@ -352,12 +352,24 @@ func closeAndRemoveFile(f *os.File) {
 	}
 }
 
-// clonedTransport creates a new HTTP client with optimized transport settings
-func clonedTransport() *http.Client {
+// clonedTransport creates a new HTTP client with optimized transport settings and TLS configuration
+func clonedTransport(tlsConfig *TLSConfig) *http.Client {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.MaxIdleConns = 100
 	tr.MaxIdleConnsPerHost = 10
 	tr.IdleConnTimeout = 90 * time.Second
+
+	// Apply TLS configuration if provided
+	if tlsConfig != nil {
+		customTLSConfig, err := tlsConfig.BuildTLSConfig()
+		if err != nil {
+			// Log error but continue with default transport
+			// In production, you might want to fail here instead
+			slog.Error("Failed to build TLS config, using defaults", "error", err)
+		} else {
+			tr.TLSClientConfig = customTLSConfig
+		}
+	}
 
 	return &http.Client{
 		Transport: tr,

@@ -113,7 +113,7 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 	}
 
 	// Create components
-	httpClient := NewHTTPClient(config.MaxConns, mirrorID, storage, currentStorage)
+	httpClient := NewHTTPClient(config.MaxConns, mirrorID, storage, currentStorage, &config.TLS)
 	parser := NewAPTParser(storage, mirrorConfig, mirrorID)
 
 	mirror := &Mirror{
