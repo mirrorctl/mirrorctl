@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"io"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -65,6 +66,42 @@ func SupportByHash(d Paragraph) bool {
 	return p[0] == "yes"
 }
 
+// validateRepositoryPath validates that a file path from repository metadata is safe.
+// This prevents path traversal attacks from malicious Release files.
+func validateRepositoryPath(p string) error {
+	// Check for directory traversal attempts in the original path BEFORE cleaning
+	// This catches cases like "main/../binary-amd64/Packages" which would become
+	// "binary-amd64/Packages" after cleaning and lose the attack vector evidence
+	if strings.Contains(p, "..") {
+		return errors.New("unsafe repository path (contains directory traversal): " + p)
+	}
+
+	// Check for absolute paths - repository paths should always be relative
+	if filepath.IsAbs(p) {
+		return errors.New("unsafe repository path (absolute path not allowed): " + p)
+	}
+
+	// Additional check: ensure the path doesn't start with "/"
+	if strings.HasPrefix(p, "/") {
+		return errors.New("unsafe repository path (starts with slash): " + p)
+	}
+
+	// Clean the path and do additional validation
+	cleanPath := path.Clean(p)
+
+	// After cleaning, check again for any remaining traversal attempts
+	if strings.Contains(cleanPath, "..") {
+		return errors.New("unsafe repository path (contains directory traversal after cleaning): " + p)
+	}
+
+	// Check for Windows-style absolute paths (only on relevant platforms)
+	if len(cleanPath) >= 3 && cleanPath[1] == ':' && (cleanPath[2] == '\\' || cleanPath[2] == '/') {
+		return errors.New("unsafe repository path (Windows absolute path): " + p)
+	}
+
+	return nil
+}
+
 func parseChecksum(l string) (p string, size uint64, csum []byte, err error) {
 	flds := strings.Fields(l)
 	if len(flds) != 3 {
@@ -82,6 +119,12 @@ func parseChecksum(l string) (p string, size uint64, csum []byte, err error) {
 	}
 
 	p = flds[2]
+
+	// Validate the path for security
+	if err = validateRepositoryPath(p); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -215,6 +258,11 @@ func getFilesFromPackages(p string, r io.Reader) ([]*FileInfo, Paragraph, error)
 		}
 		fpath := path.Clean(filename[0])
 
+		// Validate the path for security
+		if err := validateRepositoryPath(fpath); err != nil {
+			return nil, nil, errors.Wrap(err, "invalid Filename in "+p)
+		}
+
 		strsize, ok := d["Size"]
 		if !ok {
 			return nil, nil, errors.New("no Size in " + p)
@@ -280,6 +328,11 @@ func getFilesFromSources(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 		dir, ok := d["Directory"]
 		if !ok {
 			return nil, nil, errors.New("no Directory in " + p)
+		}
+
+		// Validate the directory path for security
+		if err := validateRepositoryPath(dir[0]); err != nil {
+			return nil, nil, errors.Wrap(err, "invalid Directory in "+p)
 		}
 
 		m := make(map[string]*FileInfo)

@@ -22,17 +22,17 @@ const (
 // Returns an error if the path is unsafe.
 func validatePath(path string) error {
 	cleanPath := filepath.Clean(path)
-	
+
 	// Check for directory traversal attempts
 	if strings.Contains(cleanPath, "..") {
 		return errors.New("unsafe path (contains directory traversal): " + path)
 	}
-	
+
 	// Check for absolute paths
 	if filepath.IsAbs(cleanPath) {
 		return errors.New("unsafe path (absolute path not allowed): " + path)
 	}
-	
+
 	return nil
 }
 
@@ -177,20 +177,34 @@ func (s *Storage) StoreLinkWithHash(fi *apt.FileInfo, fullpath string) error {
 	md5p := fi.MD5SumPath()
 	sha1p := fi.SHA1Path()
 	sha256p := fi.SHA256Path()
-	
+	sha512p := fi.SHA512Path()
+
 	// Validate all paths for security
-	paths := []string{p, md5p, sha1p, sha256p}
+	paths := []string{p, md5p, sha1p, sha256p, sha512p}
 	for _, path := range paths {
-		if err := validatePath(path); err != nil {
-			return errors.Wrap(err, "StoreLinkWithHash")
+		if path != "" { // Skip empty paths (when checksums aren't available)
+			if err := validatePath(path); err != nil {
+				return errors.Wrap(err, "StoreLinkWithHash")
+			}
 		}
 	}
-	
+
 	fpl := []string{
 		filepath.Join(s.dir, s.prefix, filepath.Clean(p)),
-		filepath.Join(s.dir, s.prefix, filepath.Clean(md5p)),
-		filepath.Join(s.dir, s.prefix, filepath.Clean(sha1p)),
-		filepath.Join(s.dir, s.prefix, filepath.Clean(sha256p)),
+	}
+
+	// Only add hash paths that exist (non-empty)
+	if md5p != "" {
+		fpl = append(fpl, filepath.Join(s.dir, s.prefix, filepath.Clean(md5p)))
+	}
+	if sha1p != "" {
+		fpl = append(fpl, filepath.Join(s.dir, s.prefix, filepath.Clean(sha1p)))
+	}
+	if sha256p != "" {
+		fpl = append(fpl, filepath.Join(s.dir, s.prefix, filepath.Clean(sha256p)))
+	}
+	if sha512p != "" {
+		fpl = append(fpl, filepath.Join(s.dir, s.prefix, filepath.Clean(sha512p)))
 	}
 
 	s.mu.Lock()
@@ -209,9 +223,18 @@ func (s *Storage) StoreLinkWithHash(fi *apt.FileInfo, fullpath string) error {
 	//
 	// Although we may fix the problem in Storage.Lookup, at this point
 	// we leave it as it is not too bad.
-	s.info[md5p] = fi
-	s.info[sha1p] = fi
-	s.info[sha256p] = fi
+	if md5p != "" {
+		s.info[md5p] = fi
+	}
+	if sha1p != "" {
+		s.info[sha1p] = fi
+	}
+	if sha256p != "" {
+		s.info[sha256p] = fi
+	}
+	if sha512p != "" {
+		s.info[sha512p] = fi
+	}
 	s.mu.Unlock()
 
 	for _, fp := range fpl {
@@ -252,9 +275,19 @@ func (s *Storage) Lookup(fi *apt.FileInfo, byhash bool) (*apt.FileInfo, string) 
 	}
 
 	if byhash {
-		fi2, fullpath := f(fi.SHA256Path())
-		if fi2 != nil {
-			return fi2, fullpath
+		// Try SHA512 first (strongest hash), then fall back to others
+		if sha512path := fi.SHA512Path(); sha512path != "" {
+			fi2, fullpath := f(sha512path)
+			if fi2 != nil {
+				return fi2, fullpath
+			}
+		}
+
+		if sha256path := fi.SHA256Path(); sha256path != "" {
+			fi2, fullpath := f(sha256path)
+			if fi2 != nil {
+				return fi2, fullpath
+			}
 		}
 	}
 
@@ -267,6 +300,6 @@ func (s *Storage) Open(p string) (*os.File, error) {
 	if err := validatePath(p); err != nil {
 		return nil, errors.Wrap(err, "Open")
 	}
-	
+
 	return os.Open(filepath.Join(s.dir, s.prefix, filepath.Clean(p)))
 }
