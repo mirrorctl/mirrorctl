@@ -125,7 +125,7 @@ func setupTestMirror(t *testing.T, serverURL string) (*Mirror, string) {
 		},
 	}
 
-	mirror, err := NewMirror(time.Now(), "test-mirror", config, false)
+	mirror, err := NewMirror(time.Now(), "test-mirror", config, false, false)
 	if err != nil {
 		os.RemoveAll(tempDir)
 		t.Fatal("Failed to create mirror:", err)

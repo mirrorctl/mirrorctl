@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -20,6 +21,7 @@ type FileInfo struct {
 	md5sum    []byte // nil means no MD5 checksum to be checked.
 	sha1sum   []byte // nil means no SHA1 ...
 	sha256sum []byte // nil means no SHA256 ...
+	sha512sum []byte // nil means no SHA512 ...
 }
 
 // Same returns true if t has the same checksum values.
@@ -40,6 +42,9 @@ func (fi *FileInfo) Same(t *FileInfo) bool {
 		return false
 	}
 	if fi.sha256sum != nil && !bytes.Equal(fi.sha256sum, t.sha256sum) {
+		return false
+	}
+	if fi.sha512sum != nil && !bytes.Equal(fi.sha512sum, t.sha512sum) {
 		return false
 	}
 	return true
@@ -65,10 +70,12 @@ func (fi *FileInfo) CalcChecksums(data []byte) {
 	md5sum := md5.Sum(data)
 	sha1sum := sha1.Sum(data)
 	sha256sum := sha256.Sum256(data)
+	sha512sum := sha512.Sum512(data)
 	fi.size = uint64(len(data))
 	fi.md5sum = md5sum[:]
 	fi.sha1sum = sha1sum[:]
 	fi.sha256sum = sha256sum[:]
+	fi.sha512sum = sha512sum[:]
 }
 
 // AddPrefix creates a new FileInfo by prepending prefix to the path.
@@ -114,12 +121,25 @@ func (fi *FileInfo) SHA256Path() string {
 		hex.EncodeToString(fi.sha256sum))
 }
 
+// SHA512Path returns the filepath for "by-hash" with sha512 checksum.
+// If fi has no checksum, an empty string will be returned.
+func (fi *FileInfo) SHA512Path() string {
+	if fi.sha512sum == nil {
+		return ""
+	}
+	return path.Join(path.Dir(fi.path),
+		"by-hash",
+		"SHA512",
+		hex.EncodeToString(fi.sha512sum))
+}
+
 type fileInfoJSON struct {
 	Path      string
 	Size      int64
 	MD5Sum    string
 	SHA1Sum   string
 	SHA256Sum string
+	SHA512Sum string
 }
 
 // MarshalJSON implements json.Marshaler
@@ -136,6 +156,9 @@ func (fi *FileInfo) MarshalJSON() ([]byte, error) {
 	if fi.sha256sum != nil {
 		fij.SHA256Sum = hex.EncodeToString(fi.sha256sum)
 	}
+	if fi.sha512sum != nil {
+		fij.SHA512Sum = hex.EncodeToString(fi.sha512sum)
+	}
 	return json.Marshal(&fij)
 }
 
@@ -147,21 +170,34 @@ func (fi *FileInfo) UnmarshalJSON(data []byte) error {
 	}
 	fi.path = fij.Path
 	fi.size = uint64(fij.Size)
-	md5sum, err := hex.DecodeString(fij.MD5Sum)
-	if err != nil {
-		return errors.Wrap(err, "UnmarshalJSON for "+fij.Path)
+	if fij.MD5Sum != "" {
+		md5sum, err := hex.DecodeString(fij.MD5Sum)
+		if err != nil {
+			return errors.Wrap(err, "UnmarshalJSON MD5Sum for "+fij.Path)
+		}
+		fi.md5sum = md5sum
 	}
-	sha1sum, err := hex.DecodeString(fij.SHA1Sum)
-	if err != nil {
-		return errors.Wrap(err, "UnmarshalJSON for "+fij.Path)
+	if fij.SHA1Sum != "" {
+		sha1sum, err := hex.DecodeString(fij.SHA1Sum)
+		if err != nil {
+			return errors.Wrap(err, "UnmarshalJSON SHA1Sum for "+fij.Path)
+		}
+		fi.sha1sum = sha1sum
 	}
-	sha256sum, err := hex.DecodeString(fij.SHA256Sum)
-	if err != nil {
-		return errors.Wrap(err, "UnmarshalJSON for "+fij.Path)
+	if fij.SHA256Sum != "" {
+		sha256sum, err := hex.DecodeString(fij.SHA256Sum)
+		if err != nil {
+			return errors.Wrap(err, "UnmarshalJSON SHA256Sum for "+fij.Path)
+		}
+		fi.sha256sum = sha256sum
 	}
-	fi.md5sum = md5sum
-	fi.sha1sum = sha1sum
-	fi.sha256sum = sha256sum
+	if fij.SHA512Sum != "" {
+		sha512sum, err := hex.DecodeString(fij.SHA512Sum)
+		if err != nil {
+			return errors.Wrap(err, "UnmarshalJSON SHA512Sum for "+fij.Path)
+		}
+		fi.sha512sum = sha512sum
+	}
 	return nil
 }
 
@@ -171,8 +207,9 @@ func CopyWithFileInfo(dst io.Writer, src io.Reader, p string) (*FileInfo, error)
 	md5hash := md5.New()
 	sha1hash := sha1.New()
 	sha256hash := sha256.New()
+	sha512hash := sha512.New()
 
-	w := io.MultiWriter(md5hash, sha1hash, sha256hash, dst)
+	w := io.MultiWriter(md5hash, sha1hash, sha256hash, sha512hash, dst)
 	n, err := io.Copy(w, src)
 	if err != nil {
 		return nil, err
@@ -184,6 +221,7 @@ func CopyWithFileInfo(dst io.Writer, src io.Reader, p string) (*FileInfo, error)
 		md5sum:    md5hash.Sum(nil),
 		sha1sum:   sha1hash.Sum(nil),
 		sha256sum: sha256hash.Sum(nil),
+		sha512sum: sha512hash.Sum(nil),
 	}, nil
 }
 

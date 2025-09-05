@@ -98,8 +98,9 @@ func getFilesFromRelease(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 	md5sums := d["MD5Sum"]
 	sha1sums := d["SHA1"]
 	sha256sums := d["SHA256"]
+	sha512sums := d["SHA512"]
 
-	if len(md5sums) == 0 && len(sha1sums) == 0 && len(sha256sums) == 0 {
+	if len(md5sums) == 0 && len(sha1sums) == 0 && len(sha256sums) == 0 && len(sha512sums) == 0 {
 		return nil, d, nil
 	}
 
@@ -155,6 +156,26 @@ func getFilesFromRelease(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 				path:      p,
 				size:      size,
 				sha256sum: csum,
+			}
+			m[p] = fi
+		}
+	}
+
+	for _, l := range sha512sums {
+		p, size, csum, err := parseChecksum(l)
+		p = path.Join(dir, path.Clean(p))
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "parseChecksum for sha512sums")
+		}
+
+		fi, ok := m[p]
+		if ok {
+			fi.sha512sum = csum
+		} else {
+			fi := &FileInfo{
+				path:      p,
+				size:      size,
+				sha512sum: csum,
 			}
 			m[p] = fi
 		}
@@ -227,6 +248,13 @@ func getFilesFromPackages(p string, r io.Reader) ([]*FileInfo, Paragraph, error)
 				return nil, nil, err
 			}
 			fi.sha256sum = b
+		}
+		if csum, ok := d["SHA512"]; ok {
+			b, err := hex.DecodeString(csum[0])
+			if err != nil {
+				return nil, nil, err
+			}
+			fi.sha512sum = b
 		}
 		l = append(l, fi)
 	}
@@ -306,8 +334,26 @@ func getFilesFromSources(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 			}
 		}
 
+		for _, l := range d["Checksums-Sha512"] {
+			fname, size, csum, err := parseChecksum(l)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "parseChecksum for Checksums-Sha512")
+			}
+
+			fpath := path.Clean(path.Join(dir[0], fname))
+			if _, ok := m[fpath]; ok {
+				m[fpath].sha512sum = csum
+			} else {
+				m[fpath] = &FileInfo{
+					path:      fpath,
+					size:      size,
+					sha512sum: csum,
+				}
+			}
+		}
+
 		for _, fi := range m {
-			if len(fi.md5sum) == 0 && len(fi.sha1sum) == 0 && len(fi.sha256sum) == 0 {
+			if len(fi.md5sum) == 0 && len(fi.sha1sum) == 0 && len(fi.sha256sum) == 0 && len(fi.sha512sum) == 0 {
 				return nil, nil, errors.New("no checksum in " + fi.path)
 			}
 			l = append(l, fi)
