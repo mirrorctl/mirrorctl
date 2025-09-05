@@ -21,3 +21,4 @@ pkg/
 # Ignore go.sum
 /go.sum
 bin
+go-apt-mirror
