@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/cheggaaa/pb/v3"
 	"github.com/cockroachdb/errors"
 	"github.com/cybozu-go/aptutil/internal/apt"
 	"golang.org/x/sync/errgroup"
@@ -53,7 +52,7 @@ type dlResult struct {
 
 // download is a goroutine to download an item.
 func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrConfig,
-	p string, fi *apt.FileInfo, byhash bool, ch chan<- *dlResult, bar *pb.ProgressBar) {
+	p string, fi *apt.FileInfo, byhash bool, ch chan<- *dlResult) {
 	var tempfile *os.File
 	r := &dlResult{
 		path: p,
@@ -146,14 +145,8 @@ RETRY:
 		r.err = err
 		return
 	}
-	// Wrap response body with progress tracking if progress bar is available
+	// Use response body directly
 	var reader io.Reader = resp.Body
-	if bar != nil {
-		reader = &progressReader{
-			reader: resp.Body,
-			bar:    bar,
-		}
-	}
 
 	fi2, err := apt.CopyWithFileInfo(tempfile, reader, p)
 	if err != nil {
@@ -196,14 +189,14 @@ RETRY:
 
 // downloadFiles downloads a list of files concurrently
 func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig,
-	fil []*apt.FileInfo, allowMissing, byhash bool, bar *pb.ProgressBar) ([]*apt.FileInfo, error) {
+	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
 	results := make(chan *dlResult, len(fil))
 	var reused, downloaded []*apt.FileInfo
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
-		reused, err = h.reuseOrDownload(ctx, mirrorConfig, fil, byhash, results, bar)
+		reused, err = h.reuseOrDownload(ctx, mirrorConfig, fil, byhash, results)
 		return err
 	})
 	g.Go(func() error {
@@ -216,10 +209,8 @@ func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig
 		return nil, err
 	}
 
-	// Only log stats if no progress bar is active (to avoid interference)
-	if bar == nil {
-		slog.Info("stats", "repo", h.mirrorID, "total", len(fil), "reused", len(reused), "downloaded", len(downloaded))
-	}
+	// Log download stats
+	slog.Info("stats", "repo", h.mirrorID, "total", len(fil), "reused", len(reused), "downloaded", len(downloaded))
 	slog.Debug("download complete", "repo", h.mirrorID, "reused_files", len(reused), "new_downloads", len(downloaded))
 
 	// reused has enough capacity.  See reuseOrDownload.
@@ -228,7 +219,7 @@ func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig
 
 // reuseOrDownload checks for existing files and downloads missing ones
 func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConfig, fil []*apt.FileInfo,
-	byhash bool, results chan<- *dlResult, bar *pb.ProgressBar) ([]*apt.FileInfo, error) {
+	byhash bool, results chan<- *dlResult) ([]*apt.FileInfo, error) {
 	// environment to manage downloading goroutines.
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -249,17 +240,10 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConf
 		if h.current != nil {
 			localfi, fullpath := h.current.Lookup(fi, byhash)
 			if localfi != nil {
-				// Only log debug messages when no progress bar is active
-				if bar == nil {
-					slog.Debug("reusing existing file", "repo", h.mirrorID, "path", fi.Path())
-				}
+				slog.Debug("reusing existing file", "repo", h.mirrorID, "path", fi.Path())
 				err := h.storeLink(localfi, fullpath, byhash)
 				if err != nil {
 					return nil, errors.Wrap(err, "storeLink")
-				}
-				// Update progress bar for reused file
-				if bar != nil {
-					bar.Add64(int64(localfi.Size()))
 				}
 				reused = append(reused, localfi)
 				continue
@@ -273,7 +257,7 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConf
 		}
 
 		g.Go(func() error {
-			h.download(ctx, mirrorConfig, fi.Path(), fi, byhash, results, bar)
+			h.download(ctx, mirrorConfig, fi.Path(), fi, byhash, results)
 			return nil
 		})
 	}
@@ -339,21 +323,6 @@ func (h *HTTPClient) countReusableFiles(fil []*apt.FileInfo, byhash bool) (reusa
 		}
 	}
 	return reusableCount, needDownloadCount
-}
-
-// progressReader wraps an io.Reader and updates a progress bar as data is read
-type progressReader struct {
-	reader io.Reader
-	bar    *pb.ProgressBar
-}
-
-// Read implements io.Reader and updates the progress bar
-func (pr *progressReader) Read(p []byte) (n int, err error) {
-	n, err = pr.reader.Read(p)
-	if n > 0 && pr.bar != nil {
-		pr.bar.Add(n)
-	}
-	return n, err
 }
 
 // storeLink stores a file in the storage system

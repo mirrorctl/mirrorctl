@@ -9,10 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
-	"github.com/cheggaaa/pb/v3"
 	"github.com/cockroachdb/errors"
 	"github.com/cybozu-go/aptutil/internal/apt"
 	"github.com/knqyf263/go-deb-version"
@@ -231,7 +229,7 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 			return nil, false, ctx.Err()
 		case <-httpClient.semaphore:
 		}
-		go httpClient.download(ctx, p.config, path, nil, false, results, nil)
+		go httpClient.download(ctx, p.config, path, nil, false, results)
 	}
 
 	// Close results channel after all goroutines complete
@@ -293,7 +291,7 @@ func (p *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
 		return nil, nil
 	}
 
-	return httpClient.downloadFiles(ctx, p.config, indices, false, byhash, nil)
+	return httpClient.downloadFiles(ctx, p.config, indices, false, byhash)
 }
 
 // downloadItems downloads package files listed in the indices
@@ -320,36 +318,18 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 		items = append(items, fi)
 	}
 
-	// Check if we need to download files and show progress bar accordingly
+	// Check if we need to download files
 	reusableCount, needDownloadCount := httpClient.countReusableFiles(items, byhash)
 
 	if needDownloadCount == 0 {
-		// All files will be reused - no progress bar needed
+		// All files will be reused
 		slog.Info("all files up to date", "repo", p.mirrorID, "total", len(items), "reused", reusableCount)
-		return httpClient.downloadFiles(ctx, p.config, items, true, byhash, nil)
+		return httpClient.downloadFiles(ctx, p.config, items, true, byhash)
 	}
 
-	// Some files need downloading - show progress bar
-	var bar *pb.ProgressBar
-	if !quiet {
-		var totalSize uint64
-		for _, fi := range items {
-			totalSize += fi.Size()
-		}
-
-		// Create progress bar with visual bar display
-		bar = pb.New64(int64(totalSize))
-		bar.Set(pb.Bytes, true)
-		bar.SetTemplateString(`[{{string . "repo"}}] {{counters . }} {{bar . }} {{percent . }} {{speed . }}`)
-		bar.Set("repo", p.mirrorID)
-		bar.SetWriter(os.Stderr)
-		bar.SetRefreshRate(time.Millisecond * 500) // Update every 500ms to show intermediate progress
-		bar.Start()
-
-		defer bar.Finish()
-	}
-
-	return httpClient.downloadFiles(ctx, p.config, items, true, byhash, bar)
+	// Some files need downloading
+	slog.Info("downloading files", "repo", p.mirrorID, "total", len(items), "reused", reusableCount, "download", needDownloadCount)
+	return httpClient.downloadFiles(ctx, p.config, items, true, byhash)
 }
 
 func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[string]*dlResult) error {
