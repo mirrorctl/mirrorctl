@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/cockroachdb/errors"
@@ -13,6 +14,27 @@ import (
 const (
 	infoJSON = "info.json"
 )
+
+// validatePath validates that a path is safe for use within the storage directory.
+// It prevents directory traversal attacks by checking for:
+// 1. Parent directory references (..)
+// 2. Absolute paths
+// Returns an error if the path is unsafe.
+func validatePath(path string) error {
+	cleanPath := filepath.Clean(path)
+	
+	// Check for directory traversal attempts
+	if strings.Contains(cleanPath, "..") {
+		return errors.New("unsafe path (contains directory traversal): " + path)
+	}
+	
+	// Check for absolute paths
+	if filepath.IsAbs(cleanPath) {
+		return errors.New("unsafe path (absolute path not allowed): " + path)
+	}
+	
+	return nil
+}
 
 // Storage manages a directory tree that mirrors a Debian repository.
 //
@@ -123,6 +145,11 @@ func (s *Storage) Save() error {
 func (s *Storage) StoreLink(fi *apt.FileInfo, fullpath string) error {
 	p := fi.Path()
 
+	// Validate path for security
+	if err := validatePath(p); err != nil {
+		return errors.Wrap(err, "StoreLink")
+	}
+
 	s.mu.Lock()
 	_, ok := s.info[p]
 	if ok {
@@ -150,6 +177,15 @@ func (s *Storage) StoreLinkWithHash(fi *apt.FileInfo, fullpath string) error {
 	md5p := fi.MD5SumPath()
 	sha1p := fi.SHA1Path()
 	sha256p := fi.SHA256Path()
+	
+	// Validate all paths for security
+	paths := []string{p, md5p, sha1p, sha256p}
+	for _, path := range paths {
+		if err := validatePath(path); err != nil {
+			return errors.Wrap(err, "StoreLinkWithHash")
+		}
+	}
+	
 	fpl := []string{
 		filepath.Join(s.dir, s.prefix, filepath.Clean(p)),
 		filepath.Join(s.dir, s.prefix, filepath.Clean(md5p)),
@@ -198,6 +234,13 @@ func (s *Storage) StoreLinkWithHash(fi *apt.FileInfo, fullpath string) error {
 // Otherwise, nil and empty string is returned.
 func (s *Storage) Lookup(fi *apt.FileInfo, byhash bool) (*apt.FileInfo, string) {
 	f := func(p string) (*apt.FileInfo, string) {
+		// Validate path for security
+		if err := validatePath(p); err != nil {
+			// Log the error but don't fail - just return not found
+			// This prevents attacks while maintaining functionality
+			return nil, ""
+		}
+
 		s.mu.RLock()
 		defer s.mu.RUnlock()
 
@@ -220,5 +263,10 @@ func (s *Storage) Lookup(fi *apt.FileInfo, byhash bool) (*apt.FileInfo, string) 
 
 // Open opens the named file and returns it.
 func (s *Storage) Open(p string) (*os.File, error) {
+	// Validate path for security
+	if err := validatePath(p); err != nil {
+		return nil, errors.Wrap(err, "Open")
+	}
+	
 	return os.Open(filepath.Join(s.dir, s.prefix, filepath.Clean(p)))
 }

@@ -73,6 +73,12 @@ func gc(ctx context.Context, config *Config) error {
 		if err != nil {
 			return errors.Wrap(err, "gc")
 		}
+		
+		// Validate that the resolved symlink stays within safe boundaries
+		if err := validateSymlinkPath(filePath, config.Dir); err != nil {
+			return errors.Wrap(err, "gc: unsafe symlink "+dirEntry.Name())
+		}
+		
 		using[dirEntry.Name()] = true
 		using[filepath.Base(filepath.Dir(filePath))] = true
 	}

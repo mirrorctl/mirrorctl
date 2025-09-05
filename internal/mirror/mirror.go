@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -28,6 +29,27 @@ func IsValidID(id string) bool {
 	return validID.MatchString(id)
 }
 
+// validateSymlinkPath validates that a resolved symlink path stays within the allowed base directory.
+// This prevents symlink attacks that could access files outside the intended directory structure.
+func validateSymlinkPath(resolvedPath, baseDir string) error {
+	// Clean both paths to normalize them
+	cleanResolved := filepath.Clean(resolvedPath)
+	cleanBase := filepath.Clean(baseDir)
+	
+	// Check if the resolved path is within the base directory
+	rel, err := filepath.Rel(cleanBase, cleanResolved)
+	if err != nil {
+		return errors.Wrap(err, "validateSymlinkPath: failed to get relative path")
+	}
+	
+	// If the relative path starts with "..", it's outside the base directory
+	if strings.HasPrefix(rel, "..") || strings.Contains(rel, ".."+string(filepath.Separator)) {
+		return errors.New("unsafe symlink: resolved path outside base directory")
+	}
+	
+	return nil
+}
+
 // Mirror implements mirroring logics.
 type Mirror struct {
 	id         string
@@ -44,6 +66,7 @@ type Mirror struct {
 // NewMirror constructs a Mirror for given mirror id.
 func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck, quiet bool) (*Mirror, error) {
 	directory := filepath.Clean(config.Dir)
+	
 	mirrorConfig, ok := config.Mirrors[mirrorID]
 	if !ok {
 		return nil, errors.New("no such mirror: " + mirrorID)
@@ -64,6 +87,11 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 	case err != nil:
 		return nil, errors.Wrap(err, mirrorID)
 	default:
+		// Validate that the resolved symlink stays within safe boundaries
+		if err := validateSymlinkPath(currentDir, directory); err != nil {
+			return nil, errors.Wrap(err, "NewMirror: "+mirrorID)
+		}
+		
 		currentStorage, err = NewStorage(filepath.Dir(currentDir), mirrorID)
 		if err != nil {
 			return nil, errors.Wrap(err, mirrorID)
