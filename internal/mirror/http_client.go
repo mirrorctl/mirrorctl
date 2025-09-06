@@ -191,6 +191,24 @@ RETRY:
 // downloadFiles downloads a list of files concurrently
 func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig,
 	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
+	return h.downloadFilesWithContext(ctx, mirrorConfig, fil, allowMissing, byhash, "files")
+}
+
+// downloadIndicesFiles downloads index files with clear logging context
+func (h *HTTPClient) downloadIndicesFiles(ctx context.Context, mirrorConfig *MirrConfig,
+	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
+	return h.downloadFilesWithContext(ctx, mirrorConfig, fil, allowMissing, byhash, "indices")
+}
+
+// downloadPackageFiles downloads package files with clear logging context
+func (h *HTTPClient) downloadPackageFiles(ctx context.Context, mirrorConfig *MirrConfig,
+	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
+	return h.downloadFilesWithContext(ctx, mirrorConfig, fil, allowMissing, byhash, "packages")
+}
+
+// downloadFilesWithContext downloads a list of files concurrently with a context description for logging
+func (h *HTTPClient) downloadFilesWithContext(ctx context.Context, mirrorConfig *MirrConfig,
+	fil []*apt.FileInfo, allowMissing, byhash bool, fileType string) ([]*apt.FileInfo, error) {
 	results := make(chan *dlResult, len(fil))
 	var reused, downloaded []*apt.FileInfo
 
@@ -210,9 +228,9 @@ func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig
 		return nil, err
 	}
 
-	// Log download stats
-	slog.Info("stats", "repo", h.mirrorID, "total", len(fil), "reused", len(reused), "downloaded", len(downloaded))
-	slog.Debug("download complete", "repo", h.mirrorID, "reused_files", len(reused), "new_downloads", len(downloaded))
+	// Log download stats with file type context
+	slog.Info("download stats", "repo", h.mirrorID, "type", fileType, "total", len(fil), "reused", len(reused), "downloaded", len(downloaded))
+	slog.Debug("download complete", "repo", h.mirrorID, "type", fileType, "reused_files", len(reused), "new_downloads", len(downloaded))
 
 	// reused has enough capacity.  See reuseOrDownload.
 	return append(reused, downloaded...), nil

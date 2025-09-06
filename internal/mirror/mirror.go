@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/cockroachdb/errors"
 	"github.com/cybozu-go/aptutil/internal/apt"
-	"log/slog"
 )
 
 const (
@@ -35,18 +36,18 @@ func validateSymlinkPath(resolvedPath, baseDir string) error {
 	// Clean both paths to normalize them
 	cleanResolved := filepath.Clean(resolvedPath)
 	cleanBase := filepath.Clean(baseDir)
-	
+
 	// Check if the resolved path is within the base directory
 	rel, err := filepath.Rel(cleanBase, cleanResolved)
 	if err != nil {
 		return errors.Wrap(err, "validateSymlinkPath: failed to get relative path")
 	}
-	
+
 	// If the relative path starts with "..", it's outside the base directory
 	if strings.HasPrefix(rel, "..") || strings.Contains(rel, ".."+string(filepath.Separator)) {
 		return errors.New("unsafe symlink: resolved path outside base directory")
 	}
-	
+
 	return nil
 }
 
@@ -66,7 +67,7 @@ type Mirror struct {
 // NewMirror constructs a Mirror for given mirror id.
 func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck, quiet bool) (*Mirror, error) {
 	directory := filepath.Clean(config.Dir)
-	
+
 	mirrorConfig, ok := config.Mirrors[mirrorID]
 	if !ok {
 		return nil, errors.New("no such mirror: " + mirrorID)
@@ -91,7 +92,7 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 		if err := validateSymlinkPath(currentDir, directory); err != nil {
 			return nil, errors.Wrap(err, "NewMirror: "+mirrorID)
 		}
-		
+
 		currentStorage, err = NewStorage(filepath.Dir(currentDir), mirrorID)
 		if err != nil {
 			return nil, errors.Wrap(err, mirrorID)
@@ -183,7 +184,7 @@ func (m *Mirror) Update(ctx context.Context) error {
 
 // updateSuite partially updates mirror for a suite.
 func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[string]*apt.FileInfo, quiet bool) error {
-	slog.Info("download Release/InRelease", "repo", m.id, "suite", suite)
+	slog.Info("downloading Release/InRelease files", "repo", m.id, "suite", suite)
 	slog.Debug("processing suite", "repo", m.id, "suite", suite, "sections", m.mc.Sections, "architectures", m.mc.Architectures)
 	indexMap, byhash, err := m.parser.downloadRelease(ctx, m.httpClient, suite, m)
 	if err != nil {
@@ -213,20 +214,20 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 	}
 
 	// download (or reuse) all indices
-	slog.Debug("downloading index files", "repo", m.id, "suite", suite)
+	slog.Info("downloading package/source index files)", "repo", m.id, "suite", suite, "total", len(indexMap))
 	indices, err := m.parser.downloadIndices(ctx, m.httpClient, indexMap, byhash)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
-	slog.Debug("index files downloaded", "repo", m.id, "suite", suite, "count", len(indices))
+	slog.Debug("index files processed", "repo", m.id, "suite", suite, "downloaded", len(indices))
 
 	// extract file information from indices and download items
-	slog.Debug("downloading package files", "repo", m.id, "suite", suite)
+	slog.Info("processing package files", "repo", m.id, "suite", suite)
 	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash, quiet)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
-	slog.Debug("package files processed", "repo", m.id, "suite", suite, "count", len(items))
+	slog.Debug("package files processed", "repo", m.id, "suite", suite, "total", len(items))
 
 	// Add items to the item map
 	for _, item := range items {

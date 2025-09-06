@@ -291,7 +291,7 @@ func (p *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
 		return nil, nil
 	}
 
-	return httpClient.downloadFiles(ctx, p.config, indices, false, byhash)
+	return httpClient.downloadIndicesFiles(ctx, p.config, indices, false, byhash)
 }
 
 // downloadItems downloads package files listed in the indices
@@ -323,13 +323,13 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 
 	if needDownloadCount == 0 {
 		// All files will be reused
-		slog.Info("all files up to date", "repo", p.mirrorID, "total", len(items), "reused", reusableCount)
-		return httpClient.downloadFiles(ctx, p.config, items, true, byhash)
+		slog.Info("all package files up to date", "repo", p.mirrorID, "total", len(items), "reused", reusableCount)
+		return httpClient.downloadPackageFiles(ctx, p.config, items, true, byhash)
 	}
 
 	// Some files need downloading
-	slog.Info("downloading files", "repo", p.mirrorID, "total", len(items), "reused", reusableCount, "download", needDownloadCount)
-	return httpClient.downloadFiles(ctx, p.config, items, true, byhash)
+	slog.Info("downloading package files", "repo", p.mirrorID, "total", len(items), "reused", reusableCount, "download", needDownloadCount)
+	return httpClient.downloadPackageFiles(ctx, p.config, items, true, byhash)
 }
 
 func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[string]*dlResult) error {
