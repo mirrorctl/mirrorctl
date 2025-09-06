@@ -157,7 +157,7 @@ func TestMirrorUpdateCycle(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "test-mirror", config, false)
+	mirror, err := NewMirror(timestamp, "test-mirror", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -232,7 +232,7 @@ func TestMirrorNetworkErrors(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "error-test", config, false)
+	mirror, err := NewMirror(timestamp, "error-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -297,7 +297,7 @@ func TestMirrorConcurrentUpdates(t *testing.T) {
 			defer wg.Done()
 
 			timestamp := time.Now()
-			mirror, err := NewMirror(timestamp, "concurrent-test", config, false)
+			mirror, err := NewMirror(timestamp, "concurrent-test", config, false, false, false)
 			if err != nil {
 				errors <- fmt.Errorf("goroutine %d: failed to create mirror: %v", id, err)
 				return
@@ -376,7 +376,7 @@ func TestMirrorContextCancellation(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "cancel-test", config, false)
+	mirror, err := NewMirror(timestamp, "cancel-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -448,7 +448,7 @@ func TestMirrorPartialDownload(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "partial-test", config, false)
+	mirror, err := NewMirror(timestamp, "partial-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}

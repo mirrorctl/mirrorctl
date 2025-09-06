@@ -17,13 +17,13 @@ func TestMirror(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := NewMirror(time.Now(), "hogehoge", c, false); err == nil {
+	if _, err := NewMirror(time.Now(), "hogehoge", c, false, false, false); err == nil {
 		t.Error(`_, err := NewMirror(time.Now(), "hogehoge", c); err == nil`)
 	}
 
 	t.Skip()
 
-	m, err := NewMirror(time.Now(), "ubuntu", c, false)
+	m, err := NewMirror(time.Now(), "ubuntu", c, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

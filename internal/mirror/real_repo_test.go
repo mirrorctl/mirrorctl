@@ -48,7 +48,7 @@ func TestMirrorWithRealRepository(t *testing.T) {
 
 	// Create mirror instance
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "slurm-test", config, false)
+	mirror, err := NewMirror(timestamp, "slurm-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -151,7 +151,7 @@ func TestMirrorRealRepoResume(t *testing.T) {
 
 	// First attempt: Start mirror but cancel quickly
 	timestamp := time.Now()
-	mirror1, err := NewMirror(timestamp, "resume-test", config, false)
+	mirror1, err := NewMirror(timestamp, "resume-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create first mirror:", err)
 	}
@@ -169,7 +169,7 @@ func TestMirrorRealRepoResume(t *testing.T) {
 	}
 
 	// Second attempt: Resume with same timestamp and longer timeout
-	mirror2, err := NewMirror(timestamp, "resume-test", config, false)
+	mirror2, err := NewMirror(timestamp, "resume-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create second mirror:", err)
 	}
@@ -225,7 +225,7 @@ func TestMirrorNetworkResilience(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "network-fail-test", config, false)
+	mirror, err := NewMirror(timestamp, "network-fail-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}

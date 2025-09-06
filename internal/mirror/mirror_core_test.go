@@ -40,7 +40,7 @@ func TestNewMirrorCreation(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "test-mirror", config, false)
+	mirror, err := NewMirror(timestamp, "test-mirror", config, false, false, false)
 	if err != nil {
 		t.Error("Failed to create valid mirror:", err)
 	}
@@ -54,7 +54,7 @@ func TestNewMirrorCreation(t *testing.T) {
 	}
 
 	// Test 2: Non-existent mirror ID should fail
-	_, err = NewMirror(timestamp, "non-existent", config, false)
+	_, err = NewMirror(timestamp, "non-existent", config, false, false, false)
 	if err == nil {
 		t.Error("Should fail with non-existent mirror ID")
 	}
@@ -109,7 +109,7 @@ func TestMirrorConfigValidation(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	_, err = NewMirror(timestamp, "invalid-mirror", config, false)
+	_, err = NewMirror(timestamp, "invalid-mirror", config, false, false, false)
 	if err == nil {
 		t.Error("Should fail with empty suites")
 	}
@@ -128,7 +128,7 @@ func TestMirrorConfigValidation(t *testing.T) {
 		Architectures: []string{"amd64"},
 	}
 
-	_, err = NewMirror(timestamp, "invalid-mirror", config, false)
+	_, err = NewMirror(timestamp, "invalid-mirror", config, false, false, false)
 	if err == nil {
 		t.Error("Should fail with flat repository having sections")
 	}
@@ -165,7 +165,7 @@ func TestMirrorStorageOperations(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "storage-test", config, false)
+	mirror, err := NewMirror(timestamp, "storage-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -219,7 +219,7 @@ func TestMirrorContextHandling(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "context-test", config, false)
+	mirror, err := NewMirror(timestamp, "context-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}

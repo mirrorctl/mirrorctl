@@ -125,7 +125,7 @@ func setupTestMirror(t *testing.T, serverURL string) (*Mirror, string) {
 		},
 	}
 
-	mirror, err := NewMirror(time.Now(), "test-mirror", config, false, false)
+	mirror, err := NewMirror(time.Now(), "test-mirror", config, false, false, false)
 	if err != nil {
 		os.RemoveAll(tempDir)
 		t.Fatal("Failed to create mirror:", err)
@@ -402,7 +402,7 @@ func TestStoreLinkBasic(t *testing.T) {
 		},
 	}
 
-	mirror, err := NewMirror(time.Now(), "test", config, false)
+	mirror, err := NewMirror(time.Now(), "test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -531,7 +531,7 @@ func TestExtractItems(t *testing.T) {
 		},
 	}
 
-	mirror, err := NewMirror(time.Now(), "test", config, false)
+	mirror, err := NewMirror(time.Now(), "test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
@@ -786,7 +786,7 @@ func TestRealRepositoryDownloadPipeline(t *testing.T) {
 	}
 
 	timestamp := time.Now()
-	mirror, err := NewMirror(timestamp, "slurm-pipeline-test", config, false)
+	mirror, err := NewMirror(timestamp, "slurm-pipeline-test", config, false, false, false)
 	if err != nil {
 		t.Fatal("Failed to create mirror:", err)
 	}
