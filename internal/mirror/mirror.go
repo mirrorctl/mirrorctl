@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,6 +25,15 @@ const (
 var (
 	validID = regexp.MustCompile(`^[a-z0-9_-]+$`)
 )
+
+// UsageStats tracks disk usage statistics for a mirror
+type UsageStats struct {
+	ReleaseFiles uint64 // Size of Release/InRelease files
+	IndexFiles   uint64 // Size of Packages/Sources files
+	PackageFiles uint64 // Size of .deb/.tar.gz files
+	Total        uint64 // Total size
+	FileCount    int    // Total number of files
+}
 
 // IsValidID checks if the given ID is valid.
 func IsValidID(id string) bool {
@@ -62,10 +72,12 @@ type Mirror struct {
 	parser     *APTParser
 	noPGPCheck bool
 	quiet      bool
+	dryRun     bool
+	usageStats *UsageStats
 }
 
 // NewMirror constructs a Mirror for given mirror id.
-func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck, quiet bool) (*Mirror, error) {
+func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck, quiet, dryRun bool) (*Mirror, error) {
 	directory := filepath.Clean(config.Dir)
 
 	mirrorConfig, ok := config.Mirrors[mirrorID]
@@ -127,6 +139,8 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 		parser:     parser,
 		noPGPCheck: noPGPCheck,
 		quiet:      quiet,
+		dryRun:     dryRun,
+		usageStats: &UsageStats{},
 	}
 	return mirror, nil
 }
@@ -153,6 +167,22 @@ func (m *Mirror) replaceLink() error {
 	return DirSync(m.dir)
 }
 
+// GetUsageStats returns the usage statistics for this mirror
+func (m *Mirror) GetUsageStats() *UsageStats {
+	return m.usageStats
+}
+
+// PrintUsageStats prints usage statistics for this mirror
+func (m *Mirror) PrintUsageStats() {
+	stats := m.usageStats
+	fmt.Printf("Repository: %s\n", m.id)
+	fmt.Printf("  Release files:  %s\n", formatBytes(stats.ReleaseFiles))
+	fmt.Printf("  Index files:    %s\n", formatBytes(stats.IndexFiles))
+	fmt.Printf("  Package files:  %s\n", formatBytes(stats.PackageFiles))
+	fmt.Printf("  Total size:     %s (%d files)\n", formatBytes(stats.Total), stats.FileCount)
+	fmt.Println()
+}
+
 // Update updates mirrored files.
 func (m *Mirror) Update(ctx context.Context) error {
 	itemMap := make(map[string]*apt.FileInfo)
@@ -165,6 +195,12 @@ func (m *Mirror) Update(ctx context.Context) error {
 	}
 
 	// All files are downloaded via updateSuite -> parser.downloadItems
+
+	if m.dryRun {
+		// In dry-run mode, skip storage operations and just print usage stats
+		m.PrintUsageStats()
+		return nil
+	}
 
 	// all files are downloaded (or reused)
 	err := m.storage.Save()
@@ -215,7 +251,7 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 
 	// download (or reuse) all indices
 	slog.Info("downloading package/source index files)", "repo", m.id, "suite", suite, "total", len(indexMap))
-	indices, err := m.parser.downloadIndices(ctx, m.httpClient, indexMap, byhash)
+	indices, err := m.parser.downloadIndices(ctx, m.httpClient, indexMap, byhash, m)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
@@ -223,7 +259,7 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 
 	// extract file information from indices and download items
 	slog.Info("processing package files", "repo", m.id, "suite", suite)
-	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash, quiet)
+	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash, quiet, m)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}

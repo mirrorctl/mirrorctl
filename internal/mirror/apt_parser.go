@@ -95,7 +95,7 @@ func addFileInfoToList(fi *apt.FileInfo, m map[string][]*apt.FileInfo, byhash bo
 }
 
 // handleReleaseResults processes download results from Release/InRelease files
-func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool) ([]*apt.FileInfo, map[string]*dlResult, error) {
+func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool, m *Mirror) ([]*apt.FileInfo, map[string]*dlResult, error) {
 	downloaded := make(map[string]*dlResult)
 	var allFileInfos []*apt.FileInfo
 	var processedOne bool
@@ -172,6 +172,8 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool)
 			}
 
 			allFileInfos = append(allFileInfos, fil...)
+
+			// Package file sizes will be calculated later when processing downloaded index files
 		}
 	}
 
@@ -222,6 +224,12 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 
 	slog.Debug("attempting to download release files", "repo", p.mirrorID, "suite", suite, "files", releaseFiles)
 
+	// In dry-run mode, we still need to download Release files to parse metadata,
+	// but we'll calculate their sizes for statistics
+	if m.dryRun {
+		slog.Info("would download release files", "repo", p.mirrorID, "suite", suite, "files", len(releaseFiles))
+	}
+
 	// Launch download goroutines
 	for _, path := range releaseFiles {
 		select {
@@ -243,9 +251,34 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 	}()
 
 	// Process all download results
-	allFileInfos, downloaded, err := p.handleReleaseResults(results, &byhash)
+	allFileInfos, downloaded, err := p.handleReleaseResults(results, &byhash, m)
 	if err != nil {
 		return nil, false, err
+	}
+
+	// Calculate usage statistics for index files listed in Release metadata
+	if m != nil && m.usageStats != nil {
+		for _, fi := range allFileInfos {
+			path := fi.Path()
+			// These are index files (Packages, Sources, etc.) listed in the Release file
+			if p.isIndexFile(path) {
+				m.usageStats.IndexFiles += fi.Size()
+				m.usageStats.Total += fi.Size()
+				m.usageStats.FileCount++
+			}
+		}
+	}
+
+	// Calculate usage statistics for the actual Release files themselves
+	if m != nil && m.usageStats != nil {
+		for _, result := range downloaded {
+			if result.err == nil && result.fi != nil {
+				// These are the actual downloaded Release/InRelease files
+				m.usageStats.ReleaseFiles += result.fi.Size()
+				m.usageStats.Total += result.fi.Size()
+				m.usageStats.FileCount++
+			}
+		}
 	}
 
 	// Ensure temp files are cleaned up
@@ -275,7 +308,7 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 
 // downloadIndices downloads index files (Packages, Sources, etc.)
 func (p *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
-	indexMap map[string][]*apt.FileInfo, byhash bool) ([]*apt.FileInfo, error) {
+	indexMap map[string][]*apt.FileInfo, byhash bool, m *Mirror) ([]*apt.FileInfo, error) {
 
 	var indices []*apt.FileInfo
 	for _, fil := range indexMap {
@@ -291,12 +324,65 @@ func (p *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
 		return nil, nil
 	}
 
+	// Note: Usage statistics for index files are now calculated in downloadRelease
+	// to avoid double-counting, since the Release file contains all file metadata
+
+	// In dry-run mode, still download index files to calculate package sizes
+	if m != nil && m.dryRun {
+		slog.Info("downloading index files to calculate package sizes", "repo", p.mirrorID, "total", len(indices))
+		// Download index files even in dry-run mode so we can parse them for package info
+		return httpClient.downloadIndicesFiles(ctx, p.config, indices, false, byhash)
+	}
+
 	return httpClient.downloadIndicesFiles(ctx, p.config, indices, false, byhash)
+}
+
+// isReleaseFile determines if a file path represents a Release or InRelease file
+func (p *APTParser) isReleaseFile(path string) bool {
+	base := filepath.Base(path)
+	return strings.HasPrefix(base, "Release") || strings.HasPrefix(base, "InRelease")
+}
+
+// isIndexFile determines if a file path represents an index file (Packages, Sources, Contents)
+func (p *APTParser) isIndexFile(path string) bool {
+	base := filepath.Base(path)
+
+	// Remove compression extensions
+	if strings.HasSuffix(base, ".gz") {
+		base = base[:len(base)-3]
+	} else if strings.HasSuffix(base, ".bz2") {
+		base = base[:len(base)-4]
+	} else if strings.HasSuffix(base, ".xz") {
+		base = base[:len(base)-3]
+	}
+
+	return base == "Packages" || base == "Sources" || base == "Contents" || base == "Index"
+}
+
+// isPackageFile determines if a file path represents an actual package file (not metadata)
+func (p *APTParser) isPackageFile(path string) bool {
+	// Skip by-hash paths
+	if strings.Contains(path, "/by-hash/") {
+		return false
+	}
+
+	// Skip metadata files
+	if p.isReleaseFile(path) || p.isIndexFile(path) {
+		return false
+	}
+
+	base := filepath.Base(path)
+	// Include actual package and source files
+	return strings.HasSuffix(base, ".deb") || strings.HasSuffix(base, ".udeb") || strings.HasSuffix(base, ".ddeb") ||
+		strings.HasSuffix(base, ".tar.gz") || strings.HasSuffix(base, ".tar.xz") || strings.HasSuffix(base, ".tar.bz2") ||
+		strings.HasSuffix(base, ".dsc") || strings.HasSuffix(base, ".orig.tar.gz") || strings.HasSuffix(base, ".orig.tar.xz") ||
+		strings.HasSuffix(base, ".debian.tar.gz") || strings.HasSuffix(base, ".debian.tar.xz") ||
+		strings.HasSuffix(base, ".diff.gz") || strings.HasSuffix(base, ".patch.gz")
 }
 
 // downloadItems downloads package files listed in the indices
 func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
-	indices []*apt.FileInfo, byhash, quiet bool) ([]*apt.FileInfo, error) {
+	indices []*apt.FileInfo, byhash, quiet bool, m *Mirror) ([]*apt.FileInfo, error) {
 
 	indexMap := make(map[string][]*apt.FileInfo)
 	itemMap := make(map[string]*apt.FileInfo)
@@ -316,6 +402,21 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 	var items []*apt.FileInfo
 	for _, fi := range filteredItemMap {
 		items = append(items, fi)
+	}
+
+	// Calculate usage statistics for package files
+	if m != nil && m.usageStats != nil {
+		for _, fi := range items {
+			m.usageStats.PackageFiles += fi.Size()
+			m.usageStats.Total += fi.Size()
+			m.usageStats.FileCount++
+		}
+	}
+
+	// In dry-run mode, skip actual package downloads after calculating sizes
+	if m != nil && m.dryRun {
+		slog.Info("calculated package file sizes", "repo", p.mirrorID, "total", len(items), "total_size", formatBytes(m.usageStats.PackageFiles))
+		return items, nil // Return file info but don't download
 	}
 
 	// Check if we need to download files

@@ -2,32 +2,38 @@ package mirror
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"log/slog"
+
 	"github.com/cockroachdb/errors"
 	"golang.org/x/sync/errgroup"
-	"log/slog"
 )
 
 const (
 	lockFilename = ".lock"
 )
 
-func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPCheck, quiet bool) error {
+func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPCheck, quiet, dryRun bool) error {
 	timestamp := time.Now()
 
 	var mirrorList []*Mirror
 	for _, mirrorID := range mirrors {
-		mirror, err := NewMirror(timestamp, mirrorID, config, noPGPCheck, quiet)
+		mirror, err := NewMirror(timestamp, mirrorID, config, noPGPCheck, quiet, dryRun)
 		if err != nil {
 			return err
 		}
 		mirrorList = append(mirrorList, mirror)
 	}
 
-	slog.Info("update starts")
+	if dryRun {
+		slog.Info("dry-run mode: calculating disk usage without downloading")
+	} else {
+		slog.Info("update starts")
+	}
 
 	// run goroutines in an environment.
 	group, ctx := errgroup.WithContext(ctx)
@@ -43,8 +49,41 @@ func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPC
 		return err
 	}
 
-	slog.Info("update ends")
+	// Print summary in dry-run mode
+	if dryRun {
+		printDryRunSummary(mirrorList)
+	} else {
+		slog.Info("update ends")
+	}
 	return nil
+}
+
+// printDryRunSummary prints a summary of disk usage for all mirrors
+func printDryRunSummary(mirrors []*Mirror) {
+	fmt.Println()
+	fmt.Println("=== Disk Usage Summary (Dry Run) ===")
+	fmt.Println()
+
+	var totalUsage UsageStats
+	for _, mirror := range mirrors {
+		stats := mirror.GetUsageStats()
+		totalUsage.ReleaseFiles += stats.ReleaseFiles
+		totalUsage.IndexFiles += stats.IndexFiles
+		totalUsage.PackageFiles += stats.PackageFiles
+		totalUsage.Total += stats.Total
+		totalUsage.FileCount += stats.FileCount
+
+		mirror.PrintUsageStats()
+	}
+
+	fmt.Printf("Total across all repositories:\n")
+	fmt.Printf("  Release files:  %s\n", formatBytes(totalUsage.ReleaseFiles))
+	fmt.Printf("  Index files:    %s\n", formatBytes(totalUsage.IndexFiles))
+	fmt.Printf("  Package files:  %s\n", formatBytes(totalUsage.PackageFiles))
+	fmt.Printf("  Total size:     %s (%d files)\n", formatBytes(totalUsage.Total), totalUsage.FileCount)
+	fmt.Printf("\nNote: In dry-run mode, index files are downloaded to calculate package sizes,\n")
+	fmt.Printf("but actual package files are not downloaded.\n")
+	fmt.Println()
 }
 
 // gc removes old mirror files, if any.
@@ -73,12 +112,12 @@ func gc(ctx context.Context, config *Config) error {
 		if err != nil {
 			return errors.Wrap(err, "gc")
 		}
-		
+
 		// Validate that the resolved symlink stays within safe boundaries
 		if err := validateSymlinkPath(filePath, config.Dir); err != nil {
 			return errors.Wrap(err, "gc: unsafe symlink "+dirEntry.Name())
 		}
-		
+
 		using[dirEntry.Name()] = true
 		using[filepath.Base(filepath.Dir(filePath))] = true
 	}
@@ -113,7 +152,7 @@ func gc(ctx context.Context, config *Config) error {
 // mirrors is a list of mirror IDs defined in the configuration file
 // (or keys in c.Mirrors).  If mirrors is an empty list, all mirrors
 // will be updated.
-func Run(config *Config, mirrors []string, noPGPCheck, quiet bool) error {
+func Run(config *Config, mirrors []string, noPGPCheck, quiet, dryRun bool) error {
 	lockFile := filepath.Join(config.Dir, lockFilename)
 	file, err := os.Open(lockFile)
 	switch {
@@ -151,7 +190,7 @@ func Run(config *Config, mirrors []string, noPGPCheck, quiet bool) error {
 
 	group, ctx := errgroup.WithContext(context.Background())
 	group.Go(func() error {
-		err := updateMirrors(ctx, config, mirrors, noPGPCheck, quiet)
+		err := updateMirrors(ctx, config, mirrors, noPGPCheck, quiet, dryRun)
 		if err != nil {
 			if gcErr := gc(ctx, config); gcErr != nil {
 				err = errors.Wrap(err, gcErr.Error())

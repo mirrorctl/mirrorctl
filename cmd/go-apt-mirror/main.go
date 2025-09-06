@@ -59,6 +59,9 @@ Usage:
   # Suppress all output except for errors
   go-apt-mirror sync --quiet
 
+  # Dry run - calculate disk usage without downloading
+  go-apt-mirror sync --dry-run
+
 If no mirror IDs are specified, all repositories in the configuration file will be
 synchronized.`,
 	Run: runMirror,
@@ -96,6 +99,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("no-pgp-check", false, "disable PGP signature verification")
 	rootCmd.PersistentFlags().Bool("verbose-errors", false, "show detailed error information including stack traces")
 	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "suppress all output except for errors")
+	rootCmd.PersistentFlags().Bool("dry-run", false, "calculate disk usage without downloading files")
 }
 
 // formatError returns a human-friendly error message, optionally with stack trace
@@ -165,8 +169,9 @@ func runMirror(cmd *cobra.Command, args []string) {
 	}
 
 	noPGPCheck, _ := cmd.Flags().GetBool("no-pgp-check")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
 
-	if err := mirror.Run(config, args, noPGPCheck, quiet); err != nil {
+	if err := mirror.Run(config, args, noPGPCheck, quiet, dryRun); err != nil {
 		errorMsg := formatError(err, verboseErrors)
 		if verboseErrors {
 			slog.Error("mirror run failed", "error", errorMsg)
