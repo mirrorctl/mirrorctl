@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"log/slog"
@@ -28,11 +29,52 @@ var (
 
 // UsageStats tracks disk usage statistics for a mirror.
 type UsageStats struct {
+	mu           sync.Mutex
 	ReleaseFiles uint64 // Size of Release/InRelease files
 	IndexFiles   uint64 // Size of Packages/Sources files
 	PackageFiles uint64 // Size of .deb/.tar.gz files
 	Total        uint64 // Total size
 	FileCount    int    // Total number of files
+}
+
+// AddReleaseFile adds statistics for a release file in a thread-safe manner.
+func (us *UsageStats) AddReleaseFile(size uint64) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	us.ReleaseFiles += size
+	us.Total += size
+	us.FileCount++
+}
+
+// AddIndexFile adds statistics for an index file in a thread-safe manner.
+func (us *UsageStats) AddIndexFile(size uint64) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	us.IndexFiles += size
+	us.Total += size
+	us.FileCount++
+}
+
+// AddPackageFile adds statistics for a package file in a thread-safe manner.
+func (us *UsageStats) AddPackageFile(size uint64) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	us.PackageFiles += size
+	us.Total += size
+	us.FileCount++
+}
+
+// GetStats returns a copy of the current statistics in a thread-safe manner.
+func (us *UsageStats) GetStats() UsageStats {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	return UsageStats{
+		ReleaseFiles: us.ReleaseFiles,
+		IndexFiles:   us.IndexFiles,
+		PackageFiles: us.PackageFiles,
+		Total:        us.Total,
+		FileCount:    us.FileCount,
+	}
 }
 
 // IsValidID checks if the given ID is valid.
@@ -168,13 +210,13 @@ func (m *Mirror) replaceLink() error {
 }
 
 // UsageStats returns the usage statistics for this mirror.
-func (m *Mirror) UsageStats() *UsageStats {
-	return m.usageStats
+func (m *Mirror) UsageStats() UsageStats {
+	return m.usageStats.GetStats()
 }
 
 // PrintUsageStats prints usage statistics for this mirror.
 func (m *Mirror) PrintUsageStats() {
-	stats := m.usageStats
+	stats := m.usageStats.GetStats()
 	fmt.Printf("Repository: %s\n", m.id)
 	fmt.Printf("  Release files:  %s\n", formatBytes(stats.ReleaseFiles))
 	fmt.Printf("  Index files:    %s\n", formatBytes(stats.IndexFiles))

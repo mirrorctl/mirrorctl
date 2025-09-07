@@ -275,9 +275,7 @@ func (ap *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient
 			path := fi.Path()
 			// These are index files (Packages, Sources, etc.) listed in the Release file
 			if ap.isIndexFile(path) {
-				m.usageStats.IndexFiles += fi.Size()
-				m.usageStats.Total += fi.Size()
-				m.usageStats.FileCount++
+				m.usageStats.AddIndexFile(fi.Size())
 			}
 		}
 	}
@@ -287,9 +285,7 @@ func (ap *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient
 		for _, result := range downloaded {
 			if result.err == nil && result.fi != nil {
 				// These are the actual downloaded Release/InRelease files
-				m.usageStats.ReleaseFiles += result.fi.Size()
-				m.usageStats.Total += result.fi.Size()
-				m.usageStats.FileCount++
+				m.usageStats.AddReleaseFile(result.fi.Size())
 			}
 		}
 	}
@@ -420,15 +416,14 @@ func (ap *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 	// Calculate usage statistics for package files
 	if m != nil && m.usageStats != nil {
 		for _, fi := range items {
-			m.usageStats.PackageFiles += fi.Size()
-			m.usageStats.Total += fi.Size()
-			m.usageStats.FileCount++
+			m.usageStats.AddPackageFile(fi.Size())
 		}
 	}
 
 	// In dry-run mode, skip actual package downloads after calculating sizes
 	if m != nil && m.dryRun {
-		slog.Info("calculated package file sizes", "repo", ap.mirrorID, "total", len(items), "total_size", formatBytes(m.usageStats.PackageFiles))
+		stats := m.usageStats.GetStats()
+		slog.Info("calculated package file sizes", "repo", ap.mirrorID, "total", len(items), "total_size", formatBytes(stats.PackageFiles))
 		return items, nil // Return file info but don't download
 	}
 
