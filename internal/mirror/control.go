@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"log/slog"
@@ -63,6 +64,11 @@ func printDryRunSummary(mirrors []*Mirror) {
 	fmt.Println()
 	fmt.Println("=== Disk Usage Summary (Dry Run) ===")
 	fmt.Println()
+
+	// Sort mirrors alphabetically by ID for consistent output
+	sort.Slice(mirrors, func(i, j int) bool {
+		return mirrors[i].id < mirrors[j].id
+	})
 
 	var totalUsage UsageStats
 	for _, mirror := range mirrors {
