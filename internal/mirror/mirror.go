@@ -197,8 +197,7 @@ func (m *Mirror) Update(ctx context.Context) error {
 	// All files are downloaded via updateSuite -> parser.downloadItems
 
 	if m.dryRun {
-		// In dry-run mode, skip storage operations and just print usage stats
-		m.PrintUsageStats()
+		// In dry-run mode, skip storage operations
 		return nil
 	}
 
