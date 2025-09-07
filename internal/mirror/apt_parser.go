@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
 	"github.com/cockroachdb/errors"
@@ -100,8 +101,10 @@ func (ap *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool
 	var allFileInfos []*apt.FileInfo
 	var processedOne bool
 	var downloadErrors []error
+	var resultsReceived int
 
 	for result := range results {
+		resultsReceived++
 		if result.err != nil {
 			downloadErrors = append(downloadErrors, result.err)
 			slog.Warn("failed to download release file", "repo", ap.mirrorID, "path", result.path, "error", result.err)
@@ -188,6 +191,7 @@ func (ap *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool
 	}
 
 	slog.Debug("download results summary", "repo", ap.mirrorID,
+		"results_received", resultsReceived,
 		"successful_downloads", len(downloaded),
 		"not_found_variants", len(notFoundErrors),
 		"actual_errors", len(actualErrors))
@@ -204,8 +208,16 @@ func (ap *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool
 			slog.Error("no release files found - all variants returned 404", "repo", ap.mirrorID, "tried", len(notFoundErrors))
 			return nil, nil, errors.Wrap(errors.Join(notFoundErrors...), "no Release/InRelease files available")
 		} else {
-			slog.Error("no release files downloaded and no errors reported", "repo", ap.mirrorID)
-			return nil, nil, errors.New("failed to download Release/InRelease")
+			if resultsReceived == 0 {
+				slog.Error("no download results received - channel closed without data", "repo", ap.mirrorID)
+				return nil, nil, errors.New("no download results received - possible network or timeout issue")
+			} else {
+				slog.Error("no release files downloaded and no errors reported", "repo", ap.mirrorID,
+					"results_received", resultsReceived,
+					"total_download_errors", len(downloadErrors),
+					"download_errors", downloadErrors)
+				return nil, nil, errors.New("failed to download Release/InRelease")
+			}
 		}
 	}
 
@@ -231,22 +243,23 @@ func (ap *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient
 	}
 
 	// Launch download goroutines
+	var wg sync.WaitGroup
 	for _, path := range releaseFiles {
 		select {
 		case <-ctx.Done():
 			return nil, false, ctx.Err()
 		case <-httpClient.semaphore:
 		}
-		go httpClient.download(ctx, ap.config, path, nil, false, results)
+		wg.Add(1)
+		go func(p string) {
+			defer wg.Done()
+			httpClient.download(ctx, ap.config, p, nil, false, results)
+		}(path)
 	}
 
 	// Close results channel after all goroutines complete
 	go func() {
-		// Wait for all download goroutines to complete
-		for i := 0; i < len(releaseFiles); i++ {
-			<-httpClient.semaphore
-			httpClient.semaphore <- struct{}{}
-		}
+		wg.Wait()
 		close(results)
 	}()
 
@@ -331,10 +344,10 @@ func (ap *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient
 	if m != nil && m.dryRun {
 		slog.Info("downloading index files to calculate package sizes", "repo", ap.mirrorID, "total", len(indices))
 		// Download index files even in dry-run mode so we can parse them for package info
-		return httpClient.downloadIndicesFiles(ctx, ap.config, indices, false, byhash)
+		return httpClient.downloadIndicesFiles(ctx, ap.config, indices, true, byhash)
 	}
 
-	return httpClient.downloadIndicesFiles(ctx, ap.config, indices, false, byhash)
+	return httpClient.downloadIndicesFiles(ctx, ap.config, indices, true, byhash)
 }
 
 // isReleaseFile determines if a file path represents a Release or InRelease file
