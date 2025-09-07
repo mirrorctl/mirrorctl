@@ -115,7 +115,7 @@ func setupTestMirror(t *testing.T, serverURL string) (*Mirror, string) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 5,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"test-mirror": {
 				URL:           *testURL,
 				Suites:        []string{"test"},
@@ -392,7 +392,7 @@ func TestStoreLinkBasic(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 5,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"test": {
 				URL:           *testURL,
 				Suites:        []string{"test"},
@@ -521,7 +521,7 @@ func TestExtractItems(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 5,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"test": {
 				URL:           *testURL,
 				Suites:        []string{"test"},
@@ -775,7 +775,7 @@ func TestRealRepositoryDownloadPipeline(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 3, // Limited to be respectful
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"slurm-pipeline-test": {
 				URL:           *testURL,
 				Suites:        []string{"stable"},

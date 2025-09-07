@@ -19,26 +19,26 @@ const (
 type TLSConfig struct {
 	// MinVersion specifies the minimum TLS version to use (1.2, 1.3)
 	MinVersion string `toml:"min_version"`
-	
+
 	// MaxVersion specifies the maximum TLS version to use (1.2, 1.3)
 	MaxVersion string `toml:"max_version"`
-	
+
 	// InsecureSkipVerify controls whether to skip certificate verification
 	// WARNING: Only use for testing - this is a security risk
 	InsecureSkipVerify bool `toml:"insecure_skip_verify"`
-	
+
 	// CACertFile path to custom CA certificate file for verification
 	CACertFile string `toml:"ca_cert_file"`
-	
+
 	// ClientCertFile path to client certificate file (for mutual TLS)
 	ClientCertFile string `toml:"client_cert_file"`
-	
-	// ClientKeyFile path to client private key file (for mutual TLS)  
+
+	// ClientKeyFile path to client private key file (for mutual TLS)
 	ClientKeyFile string `toml:"client_key_file"`
-	
+
 	// CipherSuites specifies allowed cipher suites (empty = Go defaults)
 	CipherSuites []string `toml:"cipher_suites"`
-	
+
 	// ServerName for SNI (Server Name Indication) - overrides hostname
 	ServerName string `toml:"server_name"`
 }
@@ -82,7 +82,7 @@ func (t *TLSConfig) BuildTLSConfig() (*tls.Config, error) {
 		if err != nil {
 			return nil, errors.New("failed to read CA certificate file: " + err.Error())
 		}
-		
+
 		caCertPool := x509.NewCertPool()
 		if !caCertPool.AppendCertsFromPEM(caCert) {
 			return nil, errors.New("failed to parse CA certificate")
@@ -206,8 +206,8 @@ func (u *tomlURL) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// MirrConfig is an auxiliary struct for Config.
-type MirrConfig struct {
+// MirrorConfig is an auxiliary struct for Config.
+type MirrorConfig struct {
 	URL           tomlURL  `toml:"url"`
 	Suites        []string `toml:"suites"`
 	Sections      []string `toml:"sections"`
@@ -234,55 +234,55 @@ func isFlat(suite string) bool {
 }
 
 // Check vaildates the configuration.
-func (mirrorConfig *MirrConfig) Check() error {
-	if mirrorConfig.URL.URL == nil {
+func (mc *MirrorConfig) Check() error {
+	if mc.URL.URL == nil {
 		return errors.New("url is not set")
 	}
-	if len(mirrorConfig.Suites) == 0 {
+	if len(mc.Suites) == 0 {
 		return errors.New("no suites")
 	}
 
-	flat := isFlat(mirrorConfig.Suites[0])
+	flat := isFlat(mc.Suites[0])
 	if flat {
-		if len(mirrorConfig.Sections) != 0 {
+		if len(mc.Sections) != 0 {
 			return errors.New("flat repository cannot have sections")
 		}
-		if len(mirrorConfig.Architectures) != 0 {
+		if len(mc.Architectures) != 0 {
 			return errors.New("flat repository cannot have architectures")
 		}
 	} else {
-		if len(mirrorConfig.Sections) == 0 {
+		if len(mc.Sections) == 0 {
 			return errors.New("no sections")
 		}
-		if len(mirrorConfig.Architectures) == 0 {
+		if len(mc.Architectures) == 0 {
 			return errors.New("no architectures")
 		}
 	}
 
-	for _, suite := range mirrorConfig.Suites[1:] {
+	for _, suite := range mc.Suites[1:] {
 		if flat != isFlat(suite) {
 			return errors.New("mixed flat/non-flat in suites")
 		}
 	}
 
 	// PGP configuration validation
-	if !mirrorConfig.NoPGPCheck && mirrorConfig.PGPKeyPath != "" {
-		if !path.IsAbs(mirrorConfig.PGPKeyPath) {
+	if !mc.NoPGPCheck && mc.PGPKeyPath != "" {
+		if !path.IsAbs(mc.PGPKeyPath) {
 			return errors.New("pgp_key_path must be an absolute path")
 		}
-		if _, err := os.Stat(mirrorConfig.PGPKeyPath); os.IsNotExist(err) {
-			return errors.New("pgp_key_path does not exist: " + mirrorConfig.PGPKeyPath)
+		if _, err := os.Stat(mc.PGPKeyPath); os.IsNotExist(err) {
+			return errors.New("pgp_key_path does not exist: " + mc.PGPKeyPath)
 		} else if err != nil {
 			return errors.New("cannot access pgp_key_path: " + err.Error())
 		}
 
 		// Check if file is readable
-		file, err := os.Open(mirrorConfig.PGPKeyPath)
+		file, err := os.Open(mc.PGPKeyPath)
 		if err != nil {
 			return errors.New("cannot read pgp_key_path: " + err.Error())
 		}
 		if err := file.Close(); err != nil {
-			slog.Warn("failed to close PGP key file during validation", "path", mirrorConfig.PGPKeyPath, "error", err)
+			slog.Warn("failed to close PGP key file during validation", "path", mc.PGPKeyPath, "error", err)
 		}
 	}
 
@@ -291,7 +291,7 @@ func (mirrorConfig *MirrConfig) Check() error {
 
 // ReleaseFiles generates a list relative paths to "Release",
 // "Release.gpg", or "InRelease" files.
-func (mirrorConfig *MirrConfig) ReleaseFiles(suite string) []string {
+func (mc *MirrorConfig) ReleaseFiles(suite string) []string {
 	var fileList []string
 
 	relpath := suite
@@ -315,8 +315,8 @@ func (mirrorConfig *MirrConfig) ReleaseFiles(suite string) []string {
 }
 
 // Resolve returns *url.URL for a relative path.
-func (mirrorConfig *MirrConfig) Resolve(path string) *url.URL {
-	return mirrorConfig.URL.ResolveReference(&url.URL{Path: path})
+func (mc *MirrorConfig) Resolve(path string) *url.URL {
+	return mc.URL.ResolveReference(&url.URL{Path: path})
 }
 
 func rawName(filePath string) string {
@@ -326,20 +326,20 @@ func rawName(filePath string) string {
 }
 
 // MatchingIndex returns true if mc is configured for the given index.
-func (mirrorConfig *MirrConfig) MatchingIndex(filePath string) bool {
+func (mc *MirrorConfig) MatchingIndex(filePath string) bool {
 	rawName := rawName(filePath)
 
 	if rawName == "Index" || rawName == "Release" {
 		return true
 	}
 
-	if isFlat(mirrorConfig.Suites[0]) {
+	if isFlat(mc.Suites[0]) {
 		// scan Packages and Sources
 		switch rawName {
 		case "Packages":
 			return true
 		case "Sources":
-			return mirrorConfig.Source
+			return mc.Source
 		}
 		return false
 	}
@@ -347,15 +347,15 @@ func (mirrorConfig *MirrConfig) MatchingIndex(filePath string) bool {
 	pathNoExt := filePath[0 : len(filePath)-len(path.Ext(filePath))]
 	var architectures []string
 	architectures = append(architectures, "all")
-	architectures = append(architectures, mirrorConfig.Architectures...)
-	for _, section := range mirrorConfig.Sections {
+	architectures = append(architectures, mc.Architectures...)
+	for _, section := range mc.Sections {
 		for _, arch := range architectures {
 			t := path.Join(path.Clean(section), "binary-"+arch, "Packages")
 			if strings.HasSuffix(pathNoExt, t) {
 				return true
 			}
 		}
-		if mirrorConfig.Source {
+		if mc.Source {
 			t := path.Join(path.Clean(section), "source", "Sources")
 			if strings.HasSuffix(pathNoExt, t) {
 				return true
@@ -373,9 +373,9 @@ type LogConfig struct {
 }
 
 // Apply configures the global slog logger based on the configuration
-func (logConfig *LogConfig) Apply() error {
+func (lc *LogConfig) Apply() error {
 	var level slog.Level
-	switch strings.ToLower(logConfig.Level) {
+	switch strings.ToLower(lc.Level) {
 	case "debug":
 		level = slog.LevelDebug
 	case "info", "":
@@ -385,19 +385,19 @@ func (logConfig *LogConfig) Apply() error {
 	case "error":
 		level = slog.LevelError
 	default:
-		return errors.New("invalid log level: " + logConfig.Level)
+		return errors.New("invalid log level: " + lc.Level)
 	}
 
 	var handler slog.Handler
 	opts := &slog.HandlerOptions{Level: level}
 
-	switch strings.ToLower(logConfig.Format) {
+	switch strings.ToLower(lc.Format) {
 	case "json":
 		handler = slog.NewJSONHandler(os.Stderr, opts)
 	case "plain", "", "text":
 		handler = slog.NewTextHandler(os.Stderr, opts)
 	default:
-		return errors.New("invalid log format: " + logConfig.Format)
+		return errors.New("invalid log format: " + lc.Format)
 	}
 
 	slog.SetDefault(slog.New(handler))
@@ -414,11 +414,11 @@ func (logConfig *LogConfig) Apply() error {
 //	    ...
 //	}
 type Config struct {
-	Dir      string                 `toml:"dir"`
-	MaxConns int                    `toml:"max_conns"`
-	Log      LogConfig              `toml:"log"`
-	TLS      TLSConfig              `toml:"tls"`
-	Mirrors  map[string]*MirrConfig `toml:"mirrors"`
+	Dir      string                   `toml:"dir"`
+	MaxConns int                      `toml:"max_conns"`
+	Log      LogConfig                `toml:"log"`
+	TLS      TLSConfig                `toml:"tls"`
+	Mirrors  map[string]*MirrorConfig `toml:"mirrors"`
 }
 
 // Check validates the configuration.
@@ -426,7 +426,7 @@ func (c *Config) Check() error {
 	if c.Dir == "" {
 		return errors.New("dir is not set")
 	}
-	
+
 	// Validate TLS configuration
 	if err := c.TLS.Validate(); err != nil {
 		return errors.New("TLS configuration error: " + err.Error())

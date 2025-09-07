@@ -29,7 +29,7 @@ func TestNewMirrorCreation(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 10,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"test-mirror": {
 				URL:           *mockURL,
 				Suites:        []string{"focal"},
@@ -98,7 +98,7 @@ func TestMirrorConfigValidation(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 10,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"invalid-mirror": {
 				URL:           *mockURL,
 				Suites:        []string{}, // Empty suites
@@ -121,7 +121,7 @@ func TestMirrorConfigValidation(t *testing.T) {
 		t.Fatal("Failed to parse flat URL:", err)
 	}
 
-	config.Mirrors["invalid-mirror"] = &MirrConfig{
+	config.Mirrors["invalid-mirror"] = &MirrorConfig{
 		URL:           *flatURL,
 		Suites:        []string{"/"},    // Flat repository
 		Sections:      []string{"main"}, // Should not have sections
@@ -154,7 +154,7 @@ func TestMirrorStorageOperations(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 10,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"storage-test": {
 				URL:           *mockURL,
 				Suites:        []string{"focal"},
@@ -208,7 +208,7 @@ func TestMirrorContextHandling(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 10,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"context-test": {
 				URL:           *mockURL,
 				Suites:        []string{"focal"},
@@ -249,7 +249,7 @@ func TestReleaseFileGeneration(t *testing.T) {
 		t.Fatal("Failed to parse URL:", err)
 	}
 
-	config := &MirrConfig{
+	config := &MirrorConfig{
 		URL:           *mockURL,
 		Suites:        []string{"focal", "jammy"},
 		Sections:      []string{"main", "universe"},
@@ -286,7 +286,7 @@ func TestReleaseFileGeneration(t *testing.T) {
 	}
 
 	// Test flat repository release files
-	flatConfig := &MirrConfig{
+	flatConfig := &MirrorConfig{
 		URL:    *mockURL,
 		Suites: []string{"/"},
 	}

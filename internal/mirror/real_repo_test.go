@@ -36,7 +36,7 @@ func TestMirrorWithRealRepository(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 5, // Limit connections to be respectful
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"slurm-test": {
 				URL:           *testURL,
 				Suites:        []string{"stable"}, // Standard repository with stable suite
@@ -139,7 +139,7 @@ func TestMirrorRealRepoResume(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 2, // Very limited to make interruption more likely
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"resume-test": {
 				URL:           *testURL,
 				Suites:        []string{"stable"}, // Standard repository
@@ -214,7 +214,7 @@ func TestMirrorNetworkResilience(t *testing.T) {
 	config := &Config{
 		Dir:      tempDir,
 		MaxConns: 5,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"network-fail-test": {
 				URL:           *testURL,
 				Suites:        []string{"/"},

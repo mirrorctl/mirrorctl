@@ -17,7 +17,7 @@ func TestDownloadLoggingContext(t *testing.T) {
 	files := []*apt.FileInfo{fi}
 
 	// Create test mirror config
-	mirrorConfig := &MirrConfig{
+	mirrorConfig := &MirrorConfig{
 		URL: tomlURL{&url.URL{Scheme: "https", Host: "example.com", Path: "/"}},
 	}
 

@@ -66,7 +66,7 @@ func printDryRunSummary(mirrors []*Mirror) {
 
 	var totalUsage UsageStats
 	for _, mirror := range mirrors {
-		stats := mirror.GetUsageStats()
+		stats := mirror.UsageStats()
 		totalUsage.ReleaseFiles += stats.ReleaseFiles
 		totalUsage.IndexFiles += stats.IndexFiles
 		totalUsage.PackageFiles += stats.PackageFiles

@@ -20,13 +20,13 @@ import (
 // APTParser handles parsing APT repository metadata
 type APTParser struct {
 	storage  *Storage
-	config   *MirrConfig
+	config   *MirrorConfig
 	mirrorID string
 	pgp      *crypto.PGPHandle
 }
 
 // NewAPTParser creates a new APT parser
-func NewAPTParser(storage *Storage, config *MirrConfig, mirrorID string) *APTParser {
+func NewAPTParser(storage *Storage, config *MirrorConfig, mirrorID string) *APTParser {
 	return &APTParser{
 		storage:  storage,
 		config:   config,
@@ -36,17 +36,17 @@ func NewAPTParser(storage *Storage, config *MirrConfig, mirrorID string) *APTPar
 }
 
 // extractItems extracts file information from downloaded APT index files
-func (p *APTParser) extractItems(indices []*apt.FileInfo, indexMap map[string][]*apt.FileInfo, itemMap map[string]*apt.FileInfo, byhash bool) error {
+func (ap *APTParser) extractItems(indices []*apt.FileInfo, indexMap map[string][]*apt.FileInfo, itemMap map[string]*apt.FileInfo, byhash bool) error {
 	for _, index := range indices {
 		path := index.Path()
-		if !p.config.MatchingIndex(path) || !apt.IsSupported(path) {
+		if !ap.config.MatchingIndex(path) || !apt.IsSupported(path) {
 			continue
 		}
 		hashPath := path
 		if byhash {
 			hashPath = index.SHA256Path()
 		}
-		f, err := p.storage.Open(hashPath)
+		f, err := ap.storage.Open(hashPath)
 		if err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func addFileInfoToList(fi *apt.FileInfo, m map[string][]*apt.FileInfo, byhash bo
 }
 
 // handleReleaseResults processes download results from Release/InRelease files
-func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool, m *Mirror) ([]*apt.FileInfo, map[string]*dlResult, error) {
+func (ap *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool, m *Mirror) ([]*apt.FileInfo, map[string]*dlResult, error) {
 	downloaded := make(map[string]*dlResult)
 	var allFileInfos []*apt.FileInfo
 	var processedOne bool
@@ -104,7 +104,7 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool,
 	for result := range results {
 		if result.err != nil {
 			downloadErrors = append(downloadErrors, result.err)
-			slog.Warn("failed to download release file", "repo", p.mirrorID, "path", result.path, "error", result.err)
+			slog.Warn("failed to download release file", "repo", ap.mirrorID, "path", result.path, "error", result.err)
 			if result.tempfile != nil {
 				closeAndRemoveFile(result.tempfile)
 			}
@@ -122,7 +122,7 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool,
 
 		// Store the result for PGP validation (don't clean up immediately)
 		downloaded[path.Base(result.path)] = result
-		slog.Debug("successfully downloaded release file", "repo", p.mirrorID, "file", path.Base(result.path), "status", result.status)
+		slog.Debug("successfully downloaded release file", "repo", ap.mirrorID, "file", path.Base(result.path), "status", result.status)
 
 		// Only process the first successful Release or InRelease file for metadata extraction
 		// Skip signature files (.gpg) as they don't contain metadata
@@ -145,12 +145,12 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool,
 				hashPath = releaseFile.SHA256Path()
 			}
 
-			err := p.storage.StoreLink(releaseFile, result.tempfile.Name())
+			err := ap.storage.StoreLink(releaseFile, result.tempfile.Name())
 			if err != nil {
 				return nil, nil, errors.Wrap(err, "storeLink")
 			}
 
-			f, err := p.storage.Open(hashPath)
+			f, err := ap.storage.Open(hashPath)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -187,47 +187,47 @@ func (p *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool,
 		}
 	}
 
-	slog.Debug("download results summary", "repo", p.mirrorID,
+	slog.Debug("download results summary", "repo", ap.mirrorID,
 		"successful_downloads", len(downloaded),
 		"not_found_variants", len(notFoundErrors),
 		"actual_errors", len(actualErrors))
 
 	if len(notFoundErrors) > 0 {
-		slog.Debug("some release file variants not available (expected)", "repo", p.mirrorID, "count", len(notFoundErrors))
+		slog.Debug("some release file variants not available (expected)", "repo", ap.mirrorID, "count", len(notFoundErrors))
 	}
 
 	if len(downloaded) == 0 {
 		if len(actualErrors) > 0 {
-			slog.Error("all release file downloads failed with errors", "repo", p.mirrorID, "errors", actualErrors)
+			slog.Error("all release file downloads failed with errors", "repo", ap.mirrorID, "errors", actualErrors)
 			return nil, nil, errors.Wrap(errors.Join(actualErrors...), "failed to download Release/InRelease")
 		} else if len(notFoundErrors) > 0 {
-			slog.Error("no release files found - all variants returned 404", "repo", p.mirrorID, "tried", len(notFoundErrors))
+			slog.Error("no release files found - all variants returned 404", "repo", ap.mirrorID, "tried", len(notFoundErrors))
 			return nil, nil, errors.Wrap(errors.Join(notFoundErrors...), "no Release/InRelease files available")
 		} else {
-			slog.Error("no release files downloaded and no errors reported", "repo", p.mirrorID)
+			slog.Error("no release files downloaded and no errors reported", "repo", ap.mirrorID)
 			return nil, nil, errors.New("failed to download Release/InRelease")
 		}
 	}
 
 	if len(actualErrors) > 0 {
-		slog.Warn("some release file downloads failed", "repo", p.mirrorID, "errors", actualErrors)
+		slog.Warn("some release file downloads failed", "repo", ap.mirrorID, "errors", actualErrors)
 	}
 
 	return allFileInfos, downloaded, nil
 }
 
 // downloadRelease downloads Release/InRelease files and extracts index information
-func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient, suite string, m *Mirror) (map[string][]*apt.FileInfo, bool, error) {
-	releaseFiles := p.config.ReleaseFiles(suite)
+func (ap *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient, suite string, m *Mirror) (map[string][]*apt.FileInfo, bool, error) {
+	releaseFiles := ap.config.ReleaseFiles(suite)
 	results := make(chan *dlResult, len(releaseFiles))
 	byhash := false
 
-	slog.Debug("attempting to download release files", "repo", p.mirrorID, "suite", suite, "files", releaseFiles)
+	slog.Debug("attempting to download release files", "repo", ap.mirrorID, "suite", suite, "files", releaseFiles)
 
 	// In dry-run mode, we still need to download Release files to parse metadata,
 	// but we'll calculate their sizes for statistics
 	if m.dryRun {
-		slog.Info("would download release files", "repo", p.mirrorID, "suite", suite, "files", len(releaseFiles))
+		slog.Info("would download release files", "repo", ap.mirrorID, "suite", suite, "files", len(releaseFiles))
 	}
 
 	// Launch download goroutines
@@ -237,7 +237,7 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 			return nil, false, ctx.Err()
 		case <-httpClient.semaphore:
 		}
-		go httpClient.download(ctx, p.config, path, nil, false, results)
+		go httpClient.download(ctx, ap.config, path, nil, false, results)
 	}
 
 	// Close results channel after all goroutines complete
@@ -251,7 +251,7 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 	}()
 
 	// Process all download results
-	allFileInfos, downloaded, err := p.handleReleaseResults(results, &byhash, m)
+	allFileInfos, downloaded, err := ap.handleReleaseResults(results, &byhash, m)
 	if err != nil {
 		return nil, false, err
 	}
@@ -261,7 +261,7 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 		for _, fi := range allFileInfos {
 			path := fi.Path()
 			// These are index files (Packages, Sources, etc.) listed in the Release file
-			if p.isIndexFile(path) {
+			if ap.isIndexFile(path) {
 				m.usageStats.IndexFiles += fi.Size()
 				m.usageStats.Total += fi.Size()
 				m.usageStats.FileCount++
@@ -291,7 +291,7 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 	}()
 
 	// Perform PGP validation
-	if err := p.verifyPGPSignature(m, suite, downloaded); err != nil {
+	if err := ap.verifyPGPSignature(m, suite, downloaded); err != nil {
 		return nil, false, err
 	}
 
@@ -307,14 +307,14 @@ func (p *APTParser) downloadRelease(ctx context.Context, httpClient *HTTPClient,
 }
 
 // downloadIndices downloads index files (Packages, Sources, etc.)
-func (p *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
+func (ap *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
 	indexMap map[string][]*apt.FileInfo, byhash bool, m *Mirror) ([]*apt.FileInfo, error) {
 
 	var indices []*apt.FileInfo
 	for _, fil := range indexMap {
 		for _, fi := range fil {
 			path := fi.Path()
-			if p.config.MatchingIndex(path) && apt.IsSupported(path) {
+			if ap.config.MatchingIndex(path) && apt.IsSupported(path) {
 				indices = append(indices, fi)
 			}
 		}
@@ -329,22 +329,22 @@ func (p *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient,
 
 	// In dry-run mode, still download index files to calculate package sizes
 	if m != nil && m.dryRun {
-		slog.Info("downloading index files to calculate package sizes", "repo", p.mirrorID, "total", len(indices))
+		slog.Info("downloading index files to calculate package sizes", "repo", ap.mirrorID, "total", len(indices))
 		// Download index files even in dry-run mode so we can parse them for package info
-		return httpClient.downloadIndicesFiles(ctx, p.config, indices, false, byhash)
+		return httpClient.downloadIndicesFiles(ctx, ap.config, indices, false, byhash)
 	}
 
-	return httpClient.downloadIndicesFiles(ctx, p.config, indices, false, byhash)
+	return httpClient.downloadIndicesFiles(ctx, ap.config, indices, false, byhash)
 }
 
 // isReleaseFile determines if a file path represents a Release or InRelease file
-func (p *APTParser) isReleaseFile(path string) bool {
+func (ap *APTParser) isReleaseFile(path string) bool {
 	base := filepath.Base(path)
 	return strings.HasPrefix(base, "Release") || strings.HasPrefix(base, "InRelease")
 }
 
 // isIndexFile determines if a file path represents an index file (Packages, Sources, Contents)
-func (p *APTParser) isIndexFile(path string) bool {
+func (ap *APTParser) isIndexFile(path string) bool {
 	base := filepath.Base(path)
 
 	// Remove compression extensions
@@ -360,14 +360,14 @@ func (p *APTParser) isIndexFile(path string) bool {
 }
 
 // isPackageFile determines if a file path represents an actual package file (not metadata)
-func (p *APTParser) isPackageFile(path string) bool {
+func (ap *APTParser) isPackageFile(path string) bool {
 	// Skip by-hash paths
 	if strings.Contains(path, "/by-hash/") {
 		return false
 	}
 
 	// Skip metadata files
-	if p.isReleaseFile(path) || p.isIndexFile(path) {
+	if ap.isReleaseFile(path) || ap.isIndexFile(path) {
 		return false
 	}
 
@@ -381,13 +381,13 @@ func (p *APTParser) isPackageFile(path string) bool {
 }
 
 // downloadItems downloads package files listed in the indices
-func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
+func (ap *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 	indices []*apt.FileInfo, byhash, quiet bool, m *Mirror) ([]*apt.FileInfo, error) {
 
 	indexMap := make(map[string][]*apt.FileInfo)
 	itemMap := make(map[string]*apt.FileInfo)
 
-	err := p.extractItems(indices, indexMap, itemMap, byhash)
+	err := ap.extractItems(indices, indexMap, itemMap, byhash)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +397,7 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 	}
 
 	// Apply package filtering if configured
-	filteredItemMap := p.applyPackageFilters(itemMap)
+	filteredItemMap := ap.applyPackageFilters(itemMap)
 
 	var items []*apt.FileInfo
 	for _, fi := range filteredItemMap {
@@ -415,7 +415,7 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 
 	// In dry-run mode, skip actual package downloads after calculating sizes
 	if m != nil && m.dryRun {
-		slog.Info("calculated package file sizes", "repo", p.mirrorID, "total", len(items), "total_size", formatBytes(m.usageStats.PackageFiles))
+		slog.Info("calculated package file sizes", "repo", ap.mirrorID, "total", len(items), "total_size", formatBytes(m.usageStats.PackageFiles))
 		return items, nil // Return file info but don't download
 	}
 
@@ -424,16 +424,16 @@ func (p *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
 
 	if needDownloadCount == 0 {
 		// All files will be reused
-		slog.Info("all package files up to date", "repo", p.mirrorID, "total", len(items), "reused", reusableCount)
-		return httpClient.downloadPackageFiles(ctx, p.config, items, true, byhash)
+		slog.Info("all package files up to date", "repo", ap.mirrorID, "total", len(items), "reused", reusableCount)
+		return httpClient.downloadPackageFiles(ctx, ap.config, items, true, byhash)
 	}
 
 	// Some files need downloading
-	slog.Info("downloading package files", "repo", p.mirrorID, "total", len(items), "reused", reusableCount, "download", needDownloadCount)
-	return httpClient.downloadPackageFiles(ctx, p.config, items, true, byhash)
+	slog.Info("downloading package files", "repo", ap.mirrorID, "total", len(items), "reused", reusableCount, "download", needDownloadCount)
+	return httpClient.downloadPackageFiles(ctx, ap.config, items, true, byhash)
 }
 
-func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[string]*dlResult) error {
+func (ap *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[string]*dlResult) error {
 	// PGP validation logic
 	performCheck := !m.noPGPCheck && !m.mc.NoPGPCheck
 	if !performCheck {
@@ -475,7 +475,7 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 			return errors.Wrap(err, "failed to read InRelease tempfile")
 		}
 
-		verifier, err := p.pgp.Verify().VerificationKey(publicKey).New()
+		verifier, err := ap.pgp.Verify().VerificationKey(publicKey).New()
 		if err != nil {
 			return errors.Wrap(err, "failed to create verifier")
 		}
@@ -517,7 +517,7 @@ func (p *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[s
 			return errors.Wrap(err, "failed to read Release.gpg tempfile")
 		}
 
-		verifier, err := p.pgp.Verify().VerificationKey(publicKey).New()
+		verifier, err := ap.pgp.Verify().VerificationKey(publicKey).New()
 		if err != nil {
 			return errors.Wrap(err, "failed to create verifier")
 		}
@@ -573,15 +573,15 @@ func parsePackageNameVersion(filePath string) packageNameVersion {
 }
 
 // applyPackageFilters filters packages based on configured rules
-func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[string]*apt.FileInfo {
-	if p.config.Filters == nil {
-		slog.Debug("no package filters configured", "repo", p.mirrorID)
+func (ap *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[string]*apt.FileInfo {
+	if ap.config.Filters == nil {
+		slog.Debug("no package filters configured", "repo", ap.mirrorID)
 		return itemMap // No filtering configured
 	}
 
-	slog.Debug("applying package filters", "repo", p.mirrorID,
-		"keep_versions", p.config.Filters.KeepVersions,
-		"exclude_patterns", len(p.config.Filters.ExcludePatterns),
+	slog.Debug("applying package filters", "repo", ap.mirrorID,
+		"keep_versions", ap.config.Filters.KeepVersions,
+		"exclude_patterns", len(ap.config.Filters.ExcludePatterns),
 		"total_items", len(itemMap))
 
 	// Group packages by name from filename
@@ -597,8 +597,8 @@ func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[st
 		}
 
 		// Check exclude patterns
-		if p.shouldExcludePackageByName(nameVersion.name, nameVersion.version) {
-			slog.Debug("excluding package by pattern", "repo", p.mirrorID,
+		if ap.shouldExcludePackageByName(nameVersion.name, nameVersion.version) {
+			slog.Debug("excluding package by pattern", "repo", ap.mirrorID,
 				"package", nameVersion.name, "version", nameVersion.version)
 			continue
 		}
@@ -606,7 +606,7 @@ func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[st
 		packages[nameVersion.name] = append(packages[nameVersion.name], fileInfo)
 	}
 
-	slog.Debug("package grouping results", "repo", p.mirrorID,
+	slog.Debug("package grouping results", "repo", ap.mirrorID,
 		"total_files", len(itemMap), "skipped_files", skippedFiles,
 		"unique_packages", len(packages))
 
@@ -636,8 +636,8 @@ func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[st
 
 		// Keep only the specified number of versions
 		keepCount := len(versions)
-		if p.config.Filters.KeepVersions > 0 && p.config.Filters.KeepVersions < len(versions) {
-			keepCount = p.config.Filters.KeepVersions
+		if ap.config.Filters.KeepVersions > 0 && ap.config.Filters.KeepVersions < len(versions) {
+			keepCount = ap.config.Filters.KeepVersions
 		}
 
 		for i := 0; i < keepCount; i++ {
@@ -647,13 +647,13 @@ func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[st
 		}
 
 		if len(versions) > keepCount {
-			slog.Debug("filtered package versions", "repo", p.mirrorID,
+			slog.Debug("filtered package versions", "repo", ap.mirrorID,
 				"package", packageName, "total_versions", len(versions),
 				"kept_versions", keepCount)
 		}
 	}
 
-	slog.Info("package filtering complete", "repo", p.mirrorID,
+	slog.Info("package filtering complete", "repo", ap.mirrorID,
 		"total_packages", totalPackages, "kept_packages", keptPackages,
 		"filtered_out", totalPackages-keptPackages)
 
@@ -661,13 +661,13 @@ func (p *APTParser) applyPackageFilters(itemMap map[string]*apt.FileInfo) map[st
 }
 
 // shouldExcludePackageByName checks if a package should be excluded based on patterns
-func (p *APTParser) shouldExcludePackageByName(name, version string) bool {
-	if p.config.Filters.ExcludePatterns == nil {
+func (ap *APTParser) shouldExcludePackageByName(name, version string) bool {
+	if ap.config.Filters.ExcludePatterns == nil {
 		return false
 	}
 
 	fullName := name + "_" + version
-	for _, pattern := range p.config.Filters.ExcludePatterns {
+	for _, pattern := range ap.config.Filters.ExcludePatterns {
 		if matched, _ := filepath.Match(pattern, name); matched {
 			return true
 		}

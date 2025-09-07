@@ -26,7 +26,7 @@ var (
 	validID = regexp.MustCompile(`^[a-z0-9_-]+$`)
 )
 
-// UsageStats tracks disk usage statistics for a mirror
+// UsageStats tracks disk usage statistics for a mirror.
 type UsageStats struct {
 	ReleaseFiles uint64 // Size of Release/InRelease files
 	IndexFiles   uint64 // Size of Packages/Sources files
@@ -65,7 +65,7 @@ func validateSymlinkPath(resolvedPath, baseDir string) error {
 type Mirror struct {
 	id         string
 	dir        string
-	mc         *MirrConfig
+	mc         *MirrorConfig
 	storage    *Storage
 	current    *Storage
 	httpClient *HTTPClient
@@ -167,12 +167,12 @@ func (m *Mirror) replaceLink() error {
 	return DirSync(m.dir)
 }
 
-// GetUsageStats returns the usage statistics for this mirror
-func (m *Mirror) GetUsageStats() *UsageStats {
+// UsageStats returns the usage statistics for this mirror.
+func (m *Mirror) UsageStats() *UsageStats {
 	return m.usageStats
 }
 
-// PrintUsageStats prints usage statistics for this mirror
+// PrintUsageStats prints usage statistics for this mirror.
 func (m *Mirror) PrintUsageStats() {
 	stats := m.usageStats
 	fmt.Printf("Repository: %s\n", m.id)

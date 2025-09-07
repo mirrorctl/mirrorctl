@@ -14,7 +14,7 @@ import (
 	"log/slog"
 )
 
-// HTTPClient handles HTTP downloading with retries and by-hash fallback
+// HTTPClient handles HTTP downloading with retries and by-hash fallback.
 type HTTPClient struct {
 	client    *http.Client
 	semaphore chan struct{}
@@ -23,7 +23,7 @@ type HTTPClient struct {
 	current   *Storage // For file reuse logic
 }
 
-// NewHTTPClient creates a new HTTP client for downloads
+// NewHTTPClient creates a new HTTP client for downloads.
 func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Storage, tlsConfig *TLSConfig) *HTTPClient {
 	semaphore := make(chan struct{}, maxConns)
 
@@ -41,7 +41,7 @@ func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Sto
 	}
 }
 
-// dlResult represents the result of a download operation
+// dlResult represents the result of a download operation.
 type dlResult struct {
 	path     string
 	status   int
@@ -51,7 +51,7 @@ type dlResult struct {
 }
 
 // download is a goroutine to download an item.
-func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrConfig,
+func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrorConfig,
 	p string, fi *apt.FileInfo, byhash bool, ch chan<- *dlResult) {
 	var tempfile *os.File
 	r := &dlResult{
@@ -76,7 +76,6 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrConfig,
 		}()
 	}()
 
-	var retries uint
 	targets := []string{p}
 	if byhash && fi != nil {
 		targets = append(targets, fi.SHA512Path())
@@ -85,129 +84,131 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrConfig,
 		targets = append(targets, fi.MD5SumPath())
 	}
 
-RETRY:
-	if tempfile != nil {
-		closeAndRemoveFile(tempfile)
-		tempfile = nil
-	}
-
-	// allow interrupts
-	select {
-	case <-ctx.Done():
-		r.err = ctx.Err()
-		return
-	default:
-	}
-
-	if retries > 0 {
-		slog.Warn("retrying download", "repo", h.mirrorID, "path", p)
-		time.Sleep(time.Duration(1<<(retries-1)) * time.Second)
-	}
-
-	// imitation apt-get command
-	// NOTE: apt-get sets If-Modified-Since and makes a request to the server,
-	// but the current aptutil cannot handle this because it cold-starts every time.
-	header := http.Header{}
-	header.Add("Cache-Control", "max-age=0")
-	header.Add("User-Agent", "Debian APT-HTTP/1.3 (aptutil)")
-
-	req := &http.Request{
-		Method:     "GET",
-		URL:        mirrorConfig.Resolve(targets[0]),
-		Proto:      "HTTP/1.1",
-		ProtoMajor: 1,
-		ProtoMinor: 1,
-		Header:     header,
-	}
-	resp, err := h.client.Do(req.WithContext(ctx))
-	if err != nil {
-		if retries < httpRetries {
-			retries++
-			goto RETRY
+	for retries := 0; retries <= httpRetries; retries++ {
+		if tempfile != nil {
+			closeAndRemoveFile(tempfile)
+			tempfile = nil
 		}
-		r.err = err
-		return
-	}
-	defer closeRespBody(resp)
 
-	r.status = resp.StatusCode
-	if r.status >= 500 && retries < httpRetries {
-		slog.Debug("server error, retrying", "repo", h.mirrorID, "path", p, "status", r.status, "attempt", retries+1)
-		retries++
-		goto RETRY
-	}
-
-	if r.status != 200 {
-		return
-	}
-
-	tempfile, err = h.storage.TempFile()
-	if err != nil {
-		r.err = err
-		return
-	}
-	// Use response body directly
-	var reader io.Reader = resp.Body
-
-	fi2, err := apt.CopyWithFileInfo(tempfile, reader, p)
-	if err != nil {
-		if retries < httpRetries {
-			retries++
-			goto RETRY
+		// allow interrupts
+		select {
+		case <-ctx.Done():
+			r.err = ctx.Err()
+			return
+		default:
 		}
-		r.err = err
-		return
-	}
-	err = tempfile.Sync()
-	if err != nil {
-		r.err = errors.New("tempfile.Sync failed")
-		return
-	}
-	err = os.Chmod(tempfile.Name(), 0600)
-	if err != nil {
-		r.err = errors.New("os.Chmod(tempfile.Name(), 0600) failed")
-		return
-	}
 
-	if fi != nil && !fi.Same(fi2) {
-		if len(targets) > 1 {
-			targets = targets[1:]
-			slog.Warn("try by-hash retrieval", "repo", h.mirrorID, "path", p, "target", targets[0])
-			goto RETRY
+		if retries > 0 {
+			slog.Warn("retrying download", "repo", h.mirrorID, "path", p)
+			time.Sleep(time.Duration(1<<(retries-1)) * time.Second)
 		}
-		r.err = errors.New("invalid checksum for " + p)
-		return
-	}
 
-	_, err = tempfile.Seek(0, io.SeekStart)
-	if err != nil {
-		r.err = errors.New("tempfile.Seek failed")
-		return
-	}
+		// imitation apt-get command
+		// NOTE: apt-get sets If-Modified-Since and makes a request to the server,
+		// but the current aptutil cannot handle this because it cold-starts every time.
+		header := http.Header{}
+		header.Add("Cache-Control", "max-age=0")
+		header.Add("User-Agent", "Debian APT-HTTP/1.3 (aptutil)")
 
-	r.fi = fi2
+		req := &http.Request{
+			Method:     "GET",
+			URL:        mirrorConfig.Resolve(targets[0]),
+			Proto:      "HTTP/1.1",
+			ProtoMajor: 1,
+			ProtoMinor: 1,
+			Header:     header,
+		}
+		resp, err := h.client.Do(req.WithContext(ctx))
+		if err != nil {
+			if retries < httpRetries {
+				continue
+			}
+			r.err = err
+			return
+		}
+		defer closeRespBody(resp)
+
+		r.status = resp.StatusCode
+		if r.status >= 500 {
+			if retries < httpRetries {
+				slog.Debug("server error, retrying", "repo", h.mirrorID, "path", p, "status", r.status, "attempt", retries+1)
+				continue
+			}
+		}
+
+		if r.status != 200 {
+			return
+		}
+
+		tempfile, err = h.storage.TempFile()
+		if err != nil {
+			r.err = err
+			return
+		}
+		// Use response body directly
+		var reader io.Reader = resp.Body
+
+		fi2, err := apt.CopyWithFileInfo(tempfile, reader, p)
+		if err != nil {
+			if retries < httpRetries {
+				continue
+			}
+			r.err = err
+			return
+		}
+		err = tempfile.Sync()
+		if err != nil {
+			r.err = errors.New("tempfile.Sync failed")
+			return
+		}
+		err = os.Chmod(tempfile.Name(), 0600)
+		if err != nil {
+			r.err = errors.New("os.Chmod(tempfile.Name(), 0600) failed")
+			return
+		}
+
+		if fi != nil && !fi.Same(fi2) {
+			if len(targets) > 1 {
+				targets = targets[1:]
+				slog.Warn("try by-hash retrieval", "repo", h.mirrorID, "path", p, "target", targets[0])
+				continue
+			}
+			r.err = errors.New("invalid checksum for " + p)
+			return
+		}
+
+		_, err = tempfile.Seek(0, io.SeekStart)
+		if err != nil {
+			r.err = errors.New("tempfile.Seek failed")
+			return
+		}
+
+		r.fi = fi2
+		return // success
+	}
+	r.err = errors.New("download failed for " + p)
 }
 
-// downloadFiles downloads a list of files concurrently
-func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrConfig,
+// downloadFiles downloads a list of files concurrently.
+func (h *HTTPClient) downloadFiles(ctx context.Context, mirrorConfig *MirrorConfig,
 	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
 	return h.downloadFilesWithContext(ctx, mirrorConfig, fil, allowMissing, byhash, "files")
 }
 
-// downloadIndicesFiles downloads index files with clear logging context
-func (h *HTTPClient) downloadIndicesFiles(ctx context.Context, mirrorConfig *MirrConfig,
+// downloadIndicesFiles downloads index files with clear logging context.
+func (h *HTTPClient) downloadIndicesFiles(ctx context.Context, mirrorConfig *MirrorConfig,
 	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
 	return h.downloadFilesWithContext(ctx, mirrorConfig, fil, allowMissing, byhash, "indices")
 }
 
-// downloadPackageFiles downloads package files with clear logging context
-func (h *HTTPClient) downloadPackageFiles(ctx context.Context, mirrorConfig *MirrConfig,
+// downloadPackageFiles downloads package files with clear logging context.
+func (h *HTTPClient) downloadPackageFiles(ctx context.Context, mirrorConfig *MirrorConfig,
 	fil []*apt.FileInfo, allowMissing, byhash bool) ([]*apt.FileInfo, error) {
 	return h.downloadFilesWithContext(ctx, mirrorConfig, fil, allowMissing, byhash, "packages")
 }
 
-// downloadFilesWithContext downloads a list of files concurrently with a context description for logging
-func (h *HTTPClient) downloadFilesWithContext(ctx context.Context, mirrorConfig *MirrConfig,
+// downloadFilesWithContext downloads a list of files concurrently with a context description for logging.
+func (h *HTTPClient) downloadFilesWithContext(ctx context.Context, mirrorConfig *MirrorConfig,
 	fil []*apt.FileInfo, allowMissing, byhash bool, fileType string) ([]*apt.FileInfo, error) {
 	results := make(chan *dlResult, len(fil))
 	var reused, downloaded []*apt.FileInfo
@@ -236,8 +237,8 @@ func (h *HTTPClient) downloadFilesWithContext(ctx context.Context, mirrorConfig 
 	return append(reused, downloaded...), nil
 }
 
-// reuseOrDownload checks for existing files and downloads missing ones
-func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConfig, fil []*apt.FileInfo,
+// reuseOrDownload checks for existing files and downloads missing ones.
+func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrorConfig, fil []*apt.FileInfo,
 	byhash bool, results chan<- *dlResult) ([]*apt.FileInfo, error) {
 	// environment to manage downloading goroutines.
 	g, ctx := errgroup.WithContext(ctx)
@@ -283,7 +284,7 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrConf
 	return reused, nil
 }
 
-// handleResult processes a download result
+// handleResult processes a download result.
 func (h *HTTPClient) handleResult(r *dlResult, allowMissing, byhash bool) (*apt.FileInfo, error) {
 	if r.tempfile != nil {
 		defer closeAndRemoveFile(r.tempfile)
@@ -312,7 +313,7 @@ func (h *HTTPClient) handleResult(r *dlResult, allowMissing, byhash bool) (*apt.
 	return r.fi, nil
 }
 
-// recvResult receives and processes download results
+// recvResult receives and processes download results.
 func (h *HTTPClient) recvResult(allowMissing, byhash bool, results <-chan *dlResult) ([]*apt.FileInfo, error) {
 	var fil []*apt.FileInfo
 	for r := range results {
@@ -327,7 +328,7 @@ func (h *HTTPClient) recvResult(allowMissing, byhash bool, results <-chan *dlRes
 	return fil, nil
 }
 
-// countReusableFiles counts how many files can be reused vs need downloading
+// countReusableFiles counts how many files can be reused vs need downloading.
 func (h *HTTPClient) countReusableFiles(fil []*apt.FileInfo, byhash bool) (reusableCount, needDownloadCount int) {
 	if h.current == nil {
 		return 0, len(fil)
@@ -344,7 +345,7 @@ func (h *HTTPClient) countReusableFiles(fil []*apt.FileInfo, byhash bool) (reusa
 	return reusableCount, needDownloadCount
 }
 
-// storeLink stores a file in the storage system
+// storeLink stores a file in the storage system.
 func (h *HTTPClient) storeLink(fileInfo *apt.FileInfo, filePath string, byhash bool) error {
 	if byhash {
 		return h.storage.StoreLinkWithHash(fileInfo, filePath)
@@ -352,14 +353,14 @@ func (h *HTTPClient) storeLink(fileInfo *apt.FileInfo, filePath string, byhash b
 	return h.storage.StoreLink(fileInfo, filePath)
 }
 
-// closeRespBody closes HTTP response body
+// closeRespBody closes HTTP response body.
 func closeRespBody(resp *http.Response) {
 	if err := resp.Body.Close(); err != nil {
 		slog.Warn("failed to close response body", "error", err)
 	}
 }
 
-// closeAndRemoveFile closes and removes a temporary file
+// closeAndRemoveFile closes and removes a temporary file.
 func closeAndRemoveFile(f *os.File) {
 	filename := f.Name()
 	if err := f.Close(); err != nil {
@@ -370,7 +371,7 @@ func closeAndRemoveFile(f *os.File) {
 	}
 }
 
-// clonedTransport creates a new HTTP client with optimized transport settings and TLS configuration
+// clonedTransport creates a new HTTP client with optimized transport settings and TLS configuration.
 func clonedTransport(tlsConfig *TLSConfig) *http.Client {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.MaxIdleConns = 100

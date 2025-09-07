@@ -145,7 +145,7 @@ func TestMirrorUpdateCycle(t *testing.T) {
 
 	config := &Config{
 		Dir: tempDir,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"test-mirror": {
 				URL:           *mockURL,
 				Suites:        []string{"test"},
@@ -220,7 +220,7 @@ func TestMirrorNetworkErrors(t *testing.T) {
 
 	config := &Config{
 		Dir: tempDir,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"error-test": {
 				URL:           *mockURL,
 				Suites:        []string{"test"},
@@ -276,7 +276,7 @@ func TestMirrorConcurrentUpdates(t *testing.T) {
 
 	config := &Config{
 		Dir: tempDir,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"concurrent-test": {
 				URL:           *mockURL,
 				Suites:        []string{"test"},
@@ -364,7 +364,7 @@ func TestMirrorContextCancellation(t *testing.T) {
 
 	config := &Config{
 		Dir: tempDir,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"cancel-test": {
 				URL:           *mockURL,
 				Suites:        []string{"test"},
@@ -436,7 +436,7 @@ func TestMirrorPartialDownload(t *testing.T) {
 
 	config := &Config{
 		Dir: tempDir,
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"partial-test": {
 				URL:           *mockURL,
 				Suites:        []string{"test"},

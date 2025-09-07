@@ -87,9 +87,9 @@ L:
 			}
 			ret[p.lastField] = append(ret[p.lastField], strings.Trim(l, " \t"))
 		case strings.ContainsRune(l, ':'):
-			t := strings.SplitN(l, ":", 2)
-			k := t[0]
-			v := strings.Trim(t[1], " \t")
+			parts := strings.SplitN(l, ":", 2)
+			k := parts[0]
+			v := strings.Trim(parts[1], " \t")
 			p.lastField = k
 			if len(v) == 0 {
 				// ignore empty value field

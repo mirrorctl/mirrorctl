@@ -11,10 +11,10 @@ import (
 
 func TestTLSConfigValidation(t *testing.T) {
 	tests := []struct {
-		name      string
-		config    TLSConfig
-		wantErr   bool
-		errMsg    string
+		name    string
+		config  TLSConfig
+		wantErr bool
+		errMsg  string
 	}{
 		{
 			name:    "empty config should be valid",
@@ -70,10 +70,10 @@ func TestTLSConfigValidation(t *testing.T) {
 
 func TestTLSConfigBuild(t *testing.T) {
 	tests := []struct {
-		name      string
-		config    TLSConfig
-		wantErr   bool
-		validate  func(*tls.Config) error
+		name     string
+		config   TLSConfig
+		wantErr  bool
+		validate func(*tls.Config) error
 	}{
 		{
 			name:   "default config",
@@ -240,11 +240,11 @@ func TestTLSConfigIntegration(t *testing.T) {
 			MinVersion: "1.2",
 			MaxVersion: "1.3",
 		},
-		Mirrors: map[string]*MirrConfig{
+		Mirrors: map[string]*MirrorConfig{
 			"test": {
-				URL: tomlURL{&url.URL{Scheme: "https", Host: "example.com", Path: "/"}},
-				Suites: []string{"test"},
-				Sections: []string{"main"},
+				URL:           tomlURL{&url.URL{Scheme: "https", Host: "example.com", Path: "/"}},
+				Suites:        []string{"test"},
+				Sections:      []string{"main"},
 				Architectures: []string{"amd64"},
 			},
 		},
