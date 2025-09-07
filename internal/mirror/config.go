@@ -329,8 +329,16 @@ func rawName(filePath string) string {
 func (mc *MirrorConfig) MatchingIndex(filePath string) bool {
 	rawName := rawName(filePath)
 
-	if rawName == "Index" || rawName == "Release" {
+	if rawName == "Index" {
 		return true
+	}
+
+	// Only allow main Release files at suite level, not section/arch-specific ones
+	if rawName == "Release" {
+		// Check if this is a main release file (dists/suite/Release)
+		// vs section-specific release file (section/binary-arch/Release)
+		dir := path.Dir(filePath)
+		return !strings.Contains(dir, "binary-") && !strings.Contains(dir, "source")
 	}
 
 	if isFlat(mc.Suites[0]) {
