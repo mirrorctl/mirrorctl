@@ -217,6 +217,9 @@ type MirrorConfig struct {
 	PGPKeyPath string `toml:"pgp_key_path,omitempty"`
 	NoPGPCheck bool   `toml:"no_pgp_check,omitempty"`
 
+	// Staging workflow configuration
+	PublishToStaging bool `toml:"publish_to_staging,omitempty"`
+
 	// Package filtering configuration
 	Filters *PackageFilters `toml:"filters,omitempty"`
 

@@ -41,6 +41,7 @@ type SnapshotInfo struct {
 	Path        string
 	CreatedAt   time.Time
 	IsPublished bool
+	IsStaged    bool
 	Size        int64
 	FileCount   int
 }
@@ -82,6 +83,11 @@ func (sm *SnapshotManager) GetLivePath(mirror string) string {
 	return filepath.Join(sm.livePath, mirror)
 }
 
+// GetStagingPath returns the path for the staging mirror symlink
+func (sm *SnapshotManager) GetStagingPath(mirror string) string {
+	return filepath.Join(sm.livePath, mirror+"-staging")
+}
+
 // GenerateSnapshotName generates a snapshot name using the configured format
 func (sm *SnapshotManager) GenerateSnapshotName() string {
 	return sm.GenerateSnapshotNameForMirror(nil)
@@ -117,6 +123,24 @@ func (sm *SnapshotManager) GetCurrentlyPublished(mirror string) (string, error) 
 	return snapshotName, nil
 }
 
+// GetCurrentlyStaged returns the name of the currently staged snapshot for a mirror
+func (sm *SnapshotManager) GetCurrentlyStaged(mirror string) (string, error) {
+	stagingPath := sm.GetStagingPath(mirror)
+
+	// Read the symlink target
+	target, err := os.Readlink(stagingPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("no staged snapshot for mirror %s", mirror)
+		}
+		return "", fmt.Errorf("failed to read staging symlink for mirror %s: %w", mirror, err)
+	}
+
+	// Extract snapshot name from target path
+	snapshotName := filepath.Base(target)
+	return snapshotName, nil
+}
+
 // ListSnapshots returns all snapshots for a mirror
 func (sm *SnapshotManager) ListSnapshots(mirror string) ([]*SnapshotInfo, error) {
 	snapshotsPath := sm.GetMirrorSnapshotsPath(mirror)
@@ -133,6 +157,7 @@ func (sm *SnapshotManager) ListSnapshots(mirror string) ([]*SnapshotInfo, error)
 
 	var snapshots []*SnapshotInfo
 	currentlyPublished, _ := sm.GetCurrentlyPublished(mirror)
+	currentlyStaged, _ := sm.GetCurrentlyStaged(mirror)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -154,6 +179,7 @@ func (sm *SnapshotManager) ListSnapshots(mirror string) ([]*SnapshotInfo, error)
 			Path:        snapshotPath,
 			CreatedAt:   info.ModTime(),
 			IsPublished: entry.Name() == currentlyPublished,
+			IsStaged:    entry.Name() == currentlyStaged,
 			Size:        size,
 			FileCount:   fileCount,
 		}
@@ -310,6 +336,98 @@ func (sm *SnapshotManager) PublishSnapshot(mirror, snapshotName string) error {
 	return nil
 }
 
+// PublishSnapshotToStaging makes a snapshot the staged version by updating the staging symlink
+func (sm *SnapshotManager) PublishSnapshotToStaging(mirror, snapshotName string) error {
+	snapshotPath := sm.GetSnapshotPath(mirror, snapshotName)
+	stagingPath := sm.GetStagingPath(mirror)
+
+	// Verify snapshot exists
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		return fmt.Errorf("snapshot %s does not exist for mirror %s", snapshotName, mirror)
+	}
+
+	// Create staging directory if it doesn't exist
+	stagingDir := filepath.Dir(stagingPath)
+	if err := os.MkdirAll(stagingDir, 0755); err != nil {
+		return fmt.Errorf("failed to create staging directory: %w", err)
+	}
+
+	// Create temporary symlink name
+	tempLink := stagingPath + ".tmp"
+
+	// Remove temporary link if it exists
+	os.Remove(tempLink)
+
+	// Create new symlink
+	if err := os.Symlink(snapshotPath, tempLink); err != nil {
+		return fmt.Errorf("failed to create temporary staging symlink: %w", err)
+	}
+
+	// Remove existing staging symlink before renaming (ignore errors)
+	os.Remove(stagingPath)
+
+	// Atomically replace the staging symlink
+	if err := os.Rename(tempLink, stagingPath); err != nil {
+		os.Remove(tempLink) // Clean up on failure
+		return fmt.Errorf("failed to update staging symlink: %w", err)
+	}
+
+	return nil
+}
+
+// PromoteSnapshot promotes the currently staged snapshot to production
+func (sm *SnapshotManager) PromoteSnapshot(mirror string) (string, error) {
+	stagingPath := sm.GetStagingPath(mirror)
+	livePath := sm.GetLivePath(mirror)
+
+	// Verify staging symlink exists
+	if _, err := os.Lstat(stagingPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("no snapshot is currently staged for mirror %s", mirror)
+	}
+
+	// Read the staging symlink target
+	target, err := os.Readlink(stagingPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read staging symlink for mirror %s: %w", mirror, err)
+	}
+
+	// Extract snapshot name for return value
+	snapshotName := filepath.Base(target)
+
+	// Verify the target snapshot actually exists
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		return "", fmt.Errorf("staged snapshot %s does not exist for mirror %s", snapshotName, mirror)
+	}
+
+	// Create live directory if it doesn't exist
+	liveDir := filepath.Dir(livePath)
+	if err := os.MkdirAll(liveDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create live directory: %w", err)
+	}
+
+	// Create temporary symlink name
+	tempLink := livePath + ".tmp"
+
+	// Remove temporary link if it exists
+	os.Remove(tempLink)
+
+	// Create new symlink pointing to the same target as staging
+	if err := os.Symlink(target, tempLink); err != nil {
+		return "", fmt.Errorf("failed to create temporary production symlink: %w", err)
+	}
+
+	// Remove existing production symlink before renaming (ignore errors)
+	os.Remove(livePath)
+
+	// Atomically replace the production symlink
+	if err := os.Rename(tempLink, livePath); err != nil {
+		os.Remove(tempLink) // Clean up on failure
+		return "", fmt.Errorf("failed to update production symlink: %w", err)
+	}
+
+	return snapshotName, nil
+}
+
 // DeleteSnapshot removes a snapshot
 func (sm *SnapshotManager) DeleteSnapshot(mirror, snapshotName string, force bool) error {
 	snapshotPath := sm.GetSnapshotPath(mirror, snapshotName)
@@ -323,6 +441,12 @@ func (sm *SnapshotManager) DeleteSnapshot(mirror, snapshotName string, force boo
 	currentlyPublished, err := sm.GetCurrentlyPublished(mirror)
 	if err == nil && currentlyPublished == snapshotName {
 		return fmt.Errorf("cannot delete snapshot %s as it is currently published for mirror %s", snapshotName, mirror)
+	}
+
+	// Check if snapshot is currently staged
+	currentlyStaged, err := sm.GetCurrentlyStaged(mirror)
+	if err == nil && currentlyStaged == snapshotName {
+		return fmt.Errorf("cannot delete snapshot %s as it is currently staged for mirror %s", snapshotName, mirror)
 	}
 
 	// Remove the snapshot directory
@@ -402,10 +526,10 @@ func (sm *SnapshotManager) PruneSnapshots(mirror string, mirrorConfig *MirrorSna
 		return nil, fmt.Errorf("failed to list snapshots: %w", err)
 	}
 
-	// Remove currently published snapshot from deletion list
+	// Remove currently published and staged snapshots from deletion list
 	var candidates []*SnapshotInfo
 	for _, snapshot := range snapshots {
-		if !snapshot.IsPublished {
+		if !snapshot.IsPublished && !snapshot.IsStaged {
 			candidates = append(candidates, snapshot)
 		}
 	}
@@ -420,9 +544,8 @@ func (sm *SnapshotManager) PruneSnapshots(mirror string, mirrorConfig *MirrorSna
 		// Keep the newest config.KeepLast snapshots, delete the rest (oldest)
 		// Since candidates is sorted oldest->newest, delete from beginning
 		candidates = candidates[:len(candidates)-config.KeepLast]
-	} else {
-		candidates = []*SnapshotInfo{} // Keep all if under limit
 	}
+	// If we have <= KeepLast candidates, don't delete any based on this rule alone
 
 	// Apply keep-within rule
 	if config.KeepWithin != "" {

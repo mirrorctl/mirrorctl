@@ -484,3 +484,245 @@ func TestSnapshotManager_Prune(t *testing.T) {
 		t.Error("published snapshot should not be pruned")
 	}
 }
+
+func TestSnapshotManager_StagingWorkflow(t *testing.T) {
+	// Create temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test mirror data structure
+	livePath := filepath.Join(tmpDir, "live")
+	mirrorDataPath := filepath.Join(tmpDir, "mirror-data", "test-mirror")
+	testFile := filepath.Join(mirrorDataPath, "test.txt")
+
+	if err := os.MkdirAll(mirrorDataPath, 0755); err != nil {
+		t.Fatalf("failed to create mirror data dir: %v", err)
+	}
+
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Create snapshot manager
+	config := &SnapshotConfig{
+		Path: filepath.Join(tmpDir, "snapshots"),
+	}
+	sm := NewSnapshotManager(config, livePath)
+
+	// Create live symlink for CreateSnapshot to work
+	os.MkdirAll(livePath, 0755)
+	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+
+	// Create snapshot
+	_, err = sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
+	if err != nil {
+		t.Fatalf("failed to create snapshot: %v", err)
+	}
+
+	// Test publishing to staging
+	err = sm.PublishSnapshotToStaging("test-mirror", "snapshot-1")
+	if err != nil {
+		t.Fatalf("failed to publish to staging: %v", err)
+	}
+
+	// Verify staging symlink exists and points to correct location
+	stagingPath := sm.GetStagingPath("test-mirror")
+	if _, err := os.Lstat(stagingPath); err != nil {
+		t.Fatalf("staging symlink should exist: %v", err)
+	}
+
+	// Verify we can get the currently staged snapshot
+	stagedSnapshot, err := sm.GetCurrentlyStaged("test-mirror")
+	if err != nil {
+		t.Fatalf("failed to get currently staged: %v", err)
+	}
+
+	if stagedSnapshot != "snapshot-1" {
+		t.Errorf("expected staged snapshot 'snapshot-1', got '%s'", stagedSnapshot)
+	}
+
+	// Test that snapshot list shows staging status
+	snapshots, err := sm.ListSnapshots("test-mirror")
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %v", err)
+	}
+
+	if len(snapshots) != 1 {
+		t.Errorf("expected 1 snapshot, got %d", len(snapshots))
+	}
+
+	if !snapshots[0].IsStaged {
+		t.Error("snapshot should be marked as staged")
+	}
+
+	if snapshots[0].IsPublished {
+		t.Error("snapshot should not be marked as published yet")
+	}
+
+	// Test promotion
+	promotedSnapshot, err := sm.PromoteSnapshot("test-mirror")
+	if err != nil {
+		t.Fatalf("failed to promote snapshot: %v", err)
+	}
+
+	if promotedSnapshot != "snapshot-1" {
+		t.Errorf("expected promoted snapshot 'snapshot-1', got '%s'", promotedSnapshot)
+	}
+
+	// Verify production symlink now exists and points to correct location
+	livePath = sm.GetLivePath("test-mirror")
+	if _, err := os.Lstat(livePath); err != nil {
+		t.Fatalf("production symlink should exist after promotion: %v", err)
+	}
+
+	// Verify we can get the currently published snapshot
+	publishedSnapshot, err := sm.GetCurrentlyPublished("test-mirror")
+	if err != nil {
+		t.Fatalf("failed to get currently published: %v", err)
+	}
+
+	if publishedSnapshot != "snapshot-1" {
+		t.Errorf("expected published snapshot 'snapshot-1', got '%s'", publishedSnapshot)
+	}
+
+	// Test that snapshot list shows both staging and published status
+	snapshots, err = sm.ListSnapshots("test-mirror")
+	if err != nil {
+		t.Fatalf("failed to list snapshots after promotion: %v", err)
+	}
+
+	if len(snapshots) != 1 {
+		t.Errorf("expected 1 snapshot after promotion, got %d", len(snapshots))
+	}
+
+	if !snapshots[0].IsStaged {
+		t.Error("snapshot should still be marked as staged")
+	}
+
+	if !snapshots[0].IsPublished {
+		t.Error("snapshot should now be marked as published")
+	}
+}
+
+func TestSnapshotManager_StagingProtection(t *testing.T) {
+	// Create temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test mirror data structure
+	livePath := filepath.Join(tmpDir, "live")
+	mirrorDataPath := filepath.Join(tmpDir, "mirror-data", "test-mirror")
+	testFile := filepath.Join(mirrorDataPath, "test.txt")
+
+	if err := os.MkdirAll(mirrorDataPath, 0755); err != nil {
+		t.Fatalf("failed to create mirror data dir: %v", err)
+	}
+
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Create snapshot manager
+	config := &SnapshotConfig{
+		Path: filepath.Join(tmpDir, "snapshots"),
+		Prune: SnapshotPruneConfig{
+			KeepLast:   1,
+			KeepWithin: "1s", // Very short for testing
+		},
+	}
+	sm := NewSnapshotManager(config, livePath)
+
+	// Create live symlink for CreateSnapshot to work
+	os.MkdirAll(livePath, 0755)
+	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+
+	// Create multiple snapshots
+	_, err = sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
+	if err != nil {
+		t.Fatalf("failed to create snapshot-1: %v", err)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+
+	_, err = sm.CreateSnapshot("test-mirror", "snapshot-2", false, nil)
+	if err != nil {
+		t.Fatalf("failed to create snapshot-2: %v", err)
+	}
+
+	// Stage one snapshot
+	err = sm.PublishSnapshotToStaging("test-mirror", "snapshot-1")
+	if err != nil {
+		t.Fatalf("failed to publish to staging: %v", err)
+	}
+
+	// Try to delete staged snapshot (should fail)
+	err = sm.DeleteSnapshot("test-mirror", "snapshot-1", false)
+	if err == nil {
+		t.Error("should not be able to delete staged snapshot")
+	}
+
+	// Wait for snapshots to be older than keep-within duration
+	time.Sleep(1200 * time.Millisecond)
+
+	// Test pruning - staged snapshot should be protected
+	deleted, err := sm.PruneSnapshots("test-mirror", nil, false, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to prune: %v", err)
+	}
+
+	// Should only delete snapshot-2, keeping snapshot-1 because it's staged
+	if len(deleted) != 1 || deleted[0] != "snapshot-2" {
+		t.Errorf("expected to delete only snapshot-2, but deleted: %v", deleted)
+	}
+
+	// Verify staged snapshot still exists
+	snapshots, err := sm.ListSnapshots("test-mirror")
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %v", err)
+	}
+
+	if len(snapshots) != 1 {
+		t.Errorf("expected 1 snapshot after pruning, got %d", len(snapshots))
+	}
+
+	if snapshots[0].Name != "snapshot-1" {
+		t.Errorf("expected remaining snapshot to be 'snapshot-1', got '%s'", snapshots[0].Name)
+	}
+
+	if !snapshots[0].IsStaged {
+		t.Error("remaining snapshot should still be staged")
+	}
+}
+
+func TestSnapshotManager_PromoteErrors(t *testing.T) {
+	// Create temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create snapshot manager
+	config := &SnapshotConfig{
+		Path: filepath.Join(tmpDir, "snapshots"),
+	}
+	sm := NewSnapshotManager(config, filepath.Join(tmpDir, "live"))
+
+	// Try to promote when nothing is staged (should fail)
+	_, err = sm.PromoteSnapshot("test-mirror")
+	if err == nil {
+		t.Error("should fail when nothing is staged")
+	}
+
+	// Test GetCurrentlyStaged when nothing is staged
+	_, err = sm.GetCurrentlyStaged("test-mirror")
+	if err == nil {
+		t.Error("should fail when nothing is staged")
+	}
+}
