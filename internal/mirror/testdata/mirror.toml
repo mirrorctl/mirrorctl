@@ -3,7 +3,7 @@ dir = "/var/spool/go-apt-mirror"
 [log]
 level = "error"
 
-[mirror.ubuntu]
+[mirrors.ubuntu]
 url = "http://archive.ubuntu.com/ubuntu"
 suites = ["trusty", "trusty-updates"]
 sections = ["main", "restricted", "universe",
@@ -13,12 +13,12 @@ sections = ["main", "restricted", "universe",
 mirror_source = true
 architectures = ["amd64", "i386"]
 
-[mirror.security]
+[mirrors.security]
 url = "http://security.ubuntu.com/ubuntu"
 suites = ["trusty-security"]
 sections = ["main", "restricted", "universe"]
 architectures = ["amd64"]
 
-[mirror.flat]
+[mirrors.flat]
 url = "http://my.local.domain/cybozu"
 suites = ["12.04/", "14.04/", "/"]
