@@ -62,18 +62,7 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrorConfig,
 		r.tempfile = tempfile
 		// Return semaphore token first, then send result
 		h.semaphore <- struct{}{}
-		// Safely send to channel with recovery from panic
-		func() {
-			defer func() {
-				if recover() != nil {
-					// Channel was closed, clean up tempfile if needed
-					if tempfile != nil {
-						closeAndRemoveFile(tempfile)
-					}
-				}
-			}()
-			ch <- r
-		}()
+		ch <- r
 	}()
 
 	targets := []string{p}
@@ -245,10 +234,8 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrorCo
 
 	// on return, wait for all DL goroutines then signal recvResult
 	// by closing results channel.
-	defer func() {
-		g.Wait()
-		close(results)
-	}()
+	defer close(results)
+	defer g.Wait()
 
 	reused := make([]*apt.FileInfo, 0, len(fil))
 
