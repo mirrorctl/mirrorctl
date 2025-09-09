@@ -1,0 +1,98 @@
+####################
+## Global Options ##
+####################
+
+dir = "/home/jcampbell/Public/mirror-dir/"
+max_conns = 10
+
+
+##########################
+## Mirror Configuration ##
+##########################
+
+[mirrors.slurm-ubuntu-noble]
+url = "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
+suites = ["stable"]
+sections = ["main"]
+mirror_source = false
+architectures = ["amd64"]
+pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+
+    [mirror.slurm-ubuntu-noble.snapshot.prune]
+    keep_last = 25 
+    keep_within = "60d"
+
+[mirrors.vscode]
+url = "https://packages.microsoft.com/repos/code/"
+suites = ["stable"]
+sections = ["main"]
+mirror_source = false
+architectures = ["amd64"]
+pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+
+    [mirrors.vscode.filters]
+    keep_versions = 1 
+    exclude_patterns = ["code-insiders","code-exploration"]
+
+    [mirrors.vscode.snapshot]
+    default_name_format = "2006-01-02"
+
+    [mirror.vscode.snapshot.prune]
+    keep_last = 3
+    keep_within = "0d"
+
+
+#########################
+# LOGGING CONFIGURATION #
+#########################
+
+[log]
+level = "info"    # debug, info, warn, error (... from most to least verbose)
+format = "plain"  # plain, json
+
+
+#####################################
+# SNAPSHOT CONFIGURATION (OPTIONAL) #
+#####################################
+
+[snapshot]
+path = "/home/jcampbell/Public/mirror-snapshots/"
+default_name_format = "2006-01-02T15-04-05Z" # Go time format
+
+[snapshot.prune]
+keep_last = 60
+keep_within = "30d"
+
+#####################
+# TLS CONFIGURATION #
+#####################
+
+[tls]
+# Minimum TLS version (1.2 or 1.3) - defaults to 1.2 for compatibility
+min_version = "1.2"
+
+# Maximum TLS version (1.2 or 1.3) - leave empty for latest
+max_version = "1.3"
+
+# WARNING: Only set to true for testing - this disables certificate verification!
+insecure_skip_verify = false
+
+# Custom CA certificate file (optional)
+# ca_cert_file = "/etc/ssl/certs/custom-ca.pem"
+
+# Client certificate for mutual TLS authentication (optional)
+# client_cert_file = "/etc/ssl/certs/client.pem"
+# client_key_file = "/etc/ssl/private/client.key"
+
+# Specify allowed cipher suites for extra security (optional)
+# Leave empty to use Go's secure defaults
+cipher_suites = [
+    "TLS_AES_256_GCM_SHA384",           # TLS 1.3
+    "TLS_CHACHA20_POLY1305_SHA256",     # TLS 1.3  
+    "TLS_AES_128_GCM_SHA256",           # TLS 1.3
+    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",    # TLS 1.2
+    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",  # TLS 1.2
+]
+
+# Custom server name for SNI (optional)
+# server_name = "packages.micorosft.com"
