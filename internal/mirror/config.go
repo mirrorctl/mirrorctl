@@ -219,6 +219,9 @@ type MirrorConfig struct {
 
 	// Package filtering configuration
 	Filters *PackageFilters `toml:"filters,omitempty"`
+
+	// Snapshot configuration for this mirror
+	Snapshot *MirrorSnapshotConfig `toml:"snapshot,omitempty"`
 }
 
 // PackageFilters defines filtering rules for packages
@@ -426,6 +429,7 @@ type Config struct {
 	MaxConns int                      `toml:"max_conns"`
 	Log      LogConfig                `toml:"log"`
 	TLS      TLSConfig                `toml:"tls"`
+	Snapshot *SnapshotConfig          `toml:"snapshot,omitempty"`
 	Mirrors  map[string]*MirrorConfig `toml:"mirrors"`
 }
 

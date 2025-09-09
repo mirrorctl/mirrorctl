@@ -12,7 +12,7 @@ func TestMirror(t *testing.T) {
 	t.Parallel()
 
 	c := new(Config)
-	_, err := toml.DecodeFile("t/mirror.toml", c)
+	_, err := toml.DecodeFile("testdata/mirror.toml", c)
 	if err != nil {
 		t.Fatal(err)
 	}

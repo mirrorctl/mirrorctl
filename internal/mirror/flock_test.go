@@ -10,7 +10,7 @@ import (
 func TestFlock(t *testing.T) {
 	t.Parallel()
 
-	cmd := exec.Command("flock", "t/mirror.toml", "sleep", "0.2")
+	cmd := exec.Command("flock", "testdata/mirror.toml", "sleep", "0.2")
 	err := cmd.Start()
 	if err != nil {
 		t.Skip()
@@ -18,7 +18,7 @@ func TestFlock(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	f, err := os.Open("t/mirror.toml")
+	f, err := os.Open("testdata/mirror.toml")
 	if err != nil {
 		t.Fatal(err)
 	}
