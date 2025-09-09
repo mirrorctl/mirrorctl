@@ -1,4 +1,4 @@
-module github.com/cybozu-go/aptutil
+module github.com/gomirror/go-apt-mirror
 
 require (
 	github.com/BurntSushi/toml v1.5.0

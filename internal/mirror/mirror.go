@@ -14,7 +14,7 @@ import (
 	"log/slog"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cybozu-go/aptutil/internal/apt"
+	"github.com/gomirror/go-apt-mirror/internal/apt"
 )
 
 const (

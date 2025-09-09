@@ -8,7 +8,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cockroachdb/errors"
-	"github.com/cybozu-go/aptutil/internal/mirror"
+	"github.com/gomirror/go-apt-mirror/internal/mirror"
 	"github.com/spf13/cobra"
 )
 

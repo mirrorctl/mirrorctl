@@ -13,7 +13,7 @@ import (
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
 	"github.com/cockroachdb/errors"
-	"github.com/cybozu-go/aptutil/internal/apt"
+	"github.com/gomirror/go-apt-mirror/internal/apt"
 	"github.com/knqyf263/go-deb-version"
 	"log/slog"
 )
