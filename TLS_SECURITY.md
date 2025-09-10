@@ -175,7 +175,7 @@ max_version = "1.3"
 
 [mirrors.ubuntu]
 url = "https://archive.ubuntu.com/ubuntu"
-suites = ["jammy", "jammy-updates"]
+suites = ["noble", "noble-updates"]
 sections = ["main", "restricted", "universe"]
 architectures = ["amd64"]
 ```
@@ -188,7 +188,7 @@ ca_cert_file = "/etc/ssl/certs/corporate-ca.pem"
 
 [mirrors.corporate]
 url = "https://mirror.corp.example.com/ubuntu"
-suites = ["jammy"]
+suites = ["noble"]
 sections = ["main"]
 architectures = ["amd64"]
 ```
@@ -205,7 +205,7 @@ cipher_suites = [
 
 [mirrors.secure]
 url = "https://secure-mirror.example.com/ubuntu"
-suites = ["jammy"]
+suites = ["noble"]
 sections = ["main"]
 architectures = ["amd64"]
 ```
@@ -220,7 +220,7 @@ ca_cert_file = "/etc/ssl/certs/mirror-ca.pem"
 
 [mirrors.authenticated]
 url = "https://authenticated-mirror.example.com/ubuntu"
-suites = ["jammy"]
+suites = ["noble"]
 sections = ["main"]  
 architectures = ["amd64"]
 ```

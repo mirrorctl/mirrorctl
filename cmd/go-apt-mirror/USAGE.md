@@ -79,7 +79,7 @@ format = "plain"  # plain, text, json
 # Mirror definitions
 [mirror.ubuntu]
 url = "http://archive.ubuntu.com/ubuntu"
-suites = ["jammy", "jammy-updates", "jammy-security"]
+suites = ["noble", "noble-updates", "noble-security"]
 sections = ["main", "restricted", "universe", "multiverse"]
 architectures = ["amd64", "arm64"]
 mirror_source = false

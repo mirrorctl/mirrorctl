@@ -9,14 +9,14 @@ func TestSHA512Support(t *testing.T) {
 	// Test SHA512 parsing from Release file
 	releaseContent := `Origin: Ubuntu
 Label: Ubuntu
-Suite: focal
+Suite: noble
 Version: 20.04
 SHA512:
  1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef          1024 main/binary-amd64/Packages
  fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321           512 main/binary-i386/Packages
 `
 
-	files, _, err := getFilesFromRelease("dists/focal/Release", strings.NewReader(releaseContent))
+	files, _, err := getFilesFromRelease("dists/noble/Release", strings.NewReader(releaseContent))
 	if err != nil {
 		t.Fatalf("Failed to parse release with SHA512: %v", err)
 	}
@@ -32,7 +32,7 @@ SHA512:
 	}
 
 	// Check amd64 file
-	fi1, exists := fileMap["dists/focal/main/binary-amd64/Packages"]
+	fi1, exists := fileMap["dists/noble/main/binary-amd64/Packages"]
 	if !exists {
 		t.Error("Expected amd64 file to be present")
 	} else {
@@ -44,14 +44,14 @@ SHA512:
 		}
 
 		// Test SHA512Path method
-		expectedSHA512Path := "dists/focal/main/binary-amd64/by-hash/SHA512/1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+		expectedSHA512Path := "dists/noble/main/binary-amd64/by-hash/SHA512/1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 		if fi1.SHA512Path() != expectedSHA512Path {
 			t.Errorf("Expected SHA512Path '%s', got '%s'", expectedSHA512Path, fi1.SHA512Path())
 		}
 	}
 
 	// Check i386 file
-	fi2, exists := fileMap["dists/focal/main/binary-i386/Packages"]
+	fi2, exists := fileMap["dists/noble/main/binary-i386/Packages"]
 	if !exists {
 		t.Error("Expected i386 file to be present")
 	} else {
@@ -77,7 +77,7 @@ SHA512: ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8
 
 `
 
-	files, _, err := getFilesFromPackages("dists/focal/main/binary-amd64/Packages", strings.NewReader(packagesContent))
+	files, _, err := getFilesFromPackages("dists/noble/main/binary-amd64/Packages", strings.NewReader(packagesContent))
 	if err != nil {
 		t.Fatalf("Failed to parse packages with SHA512: %v", err)
 	}

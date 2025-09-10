@@ -32,7 +32,7 @@ func TestNewMirrorCreation(t *testing.T) {
 		Mirrors: map[string]*MirrorConfig{
 			"test-mirror": {
 				URL:           *mockURL,
-				Suites:        []string{"focal"},
+				Suites:        []string{"noble"},
 				Sections:      []string{"main"},
 				Architectures: []string{"amd64"},
 			},
@@ -157,7 +157,7 @@ func TestMirrorStorageOperations(t *testing.T) {
 		Mirrors: map[string]*MirrorConfig{
 			"storage-test": {
 				URL:           *mockURL,
-				Suites:        []string{"focal"},
+				Suites:        []string{"noble"},
 				Sections:      []string{"main"},
 				Architectures: []string{"amd64"},
 			},
@@ -211,7 +211,7 @@ func TestMirrorContextHandling(t *testing.T) {
 		Mirrors: map[string]*MirrorConfig{
 			"context-test": {
 				URL:           *mockURL,
-				Suites:        []string{"focal"},
+				Suites:        []string{"noble"},
 				Sections:      []string{"main"},
 				Architectures: []string{"amd64"},
 			},
@@ -251,22 +251,22 @@ func TestReleaseFileGeneration(t *testing.T) {
 
 	config := &MirrorConfig{
 		URL:           *mockURL,
-		Suites:        []string{"focal", "jammy"},
+		Suites:        []string{"noble", "jammy"},
 		Sections:      []string{"main", "universe"},
 		Architectures: []string{"amd64", "arm64"},
 	}
 
 	// Test release file generation for non-flat repository
-	releaseFiles := config.ReleaseFiles("focal")
+	releaseFiles := config.ReleaseFiles("noble")
 
 	expectedFiles := []string{
-		"dists/focal/Release",
-		"dists/focal/Release.gpg",
-		"dists/focal/Release.gz",
-		"dists/focal/Release.bz2",
-		"dists/focal/InRelease",
-		"dists/focal/InRelease.gz",
-		"dists/focal/InRelease.bz2",
+		"dists/noble/Release",
+		"dists/noble/Release.gpg",
+		"dists/noble/Release.gz",
+		"dists/noble/Release.bz2",
+		"dists/noble/InRelease",
+		"dists/noble/InRelease.gz",
+		"dists/noble/InRelease.bz2",
 	}
 
 	if len(releaseFiles) < len(expectedFiles) {
