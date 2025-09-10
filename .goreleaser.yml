@@ -1,0 +1,180 @@
+# GoReleaser configuration for go-apt-mirror
+# See https://goreleaser.com for more details
+
+version: 2
+
+# Project metadata
+project_name: go-apt-mirror
+
+before:
+  hooks:
+    # Clean up any old builds
+    - go mod tidy
+    # Run tests before building
+    - go test ./...
+
+builds:
+  - id: go-apt-mirror
+    main: ./cmd/go-apt-mirror
+    binary: go-apt-mirror
+    
+    # Build for multiple platforms
+    goos:
+      - linux
+      - darwin
+      - windows
+    
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    
+    goarm:
+      - "7"
+    
+    # Ignore certain combinations that don't make sense
+    ignore:
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+    
+    # Build flags - inject version info like the build.sh script does
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.FullCommit}}
+      - -X main.buildDate={{.Date}}
+    
+    # Build environment
+    env:
+      - CGO_ENABLED=0
+    
+    # Build mode
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - ids: [ go-apt-mirror ]
+
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    
+    formats: [ 'tar.gz' ]
+    format_overrides:
+      - goos: windows
+        formats: [ 'zip' ]
+    
+    files:
+      - README.md
+      - LICENSE
+      - cmd/go-apt-mirror/USAGE.md
+      - examples/**/*
+      - TLS_SECURITY.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+      - "go mod tidy"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "Security updates"
+      regexp: '^.*?sec(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+# GitHub release configuration
+release:
+  github:
+    owner: gomirror
+    name: go-apt-mirror
+  
+  draft: false
+  prerelease: auto
+  mode: replace
+  
+  name_template: "Release {{ .Version }}"
+  
+  header: |
+    ## go-apt-mirror {{ .Version }}
+    
+    This release includes binaries for Linux, macOS, and Windows on multiple architectures.
+    
+    ### Installation
+    
+    Download the appropriate binary for your platform from the assets below, extract it, and place it in your PATH.
+    
+    ### What's Changed
+
+  footer: |
+    **Full Changelog**: https://github.com/gomirror/go-apt-mirror/compare/{{ .PreviousTag }}...{{ .Tag }}
+    
+    ### Checksums
+    
+    All binaries are checksummed for integrity verification. See `checksums.txt` for SHA256 hashes.
+
+# Homebrew tap (optional - uncomment if you want to publish to Homebrew)
+# brews:
+#   - repository:
+#       owner: gomirror
+#       name: homebrew-tap
+#     homepage: "https://github.com/gomirror/go-apt-mirror"
+#     description: "Tool for mirroring Debian package repositories"
+#     license: "MIT"
+#     test: |
+#       system "#{bin}/go-apt-mirror", "version"
+
+# Docker images (optional - uncomment if you want to build Docker images)
+# dockers:
+#   - goos: linux
+#     goarch: amd64
+#     image_templates:
+#       - "ghcr.io/gomirror/go-apt-mirror:{{ .Version }}-amd64"
+#       - "ghcr.io/gomirror/go-apt-mirror:latest-amd64"
+#     dockerfile: Dockerfile
+#     build_flag_templates:
+#       - "--platform=linux/amd64"
+#       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+#       - "--label=org.opencontainers.image.version={{ .Version }}"
+#       - "--label=org.opencontainers.image.created={{ .Date }}"
+#       - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+
+# Announce to various platforms (optional)
+# announce:
+#   slack:
+#     enabled: false
+#   discord:
+#     enabled: false
+
+# Validation and quality checks
+gomod:
+  proxy: true
+  env:
+    - GOPROXY=https://proxy.golang.org,direct
+    - GOSUMDB=sum.golang.org
+
+dist: dist
+
+git:
+  tag_sort: -version:refname
+
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"

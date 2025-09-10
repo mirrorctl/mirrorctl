@@ -7,6 +7,10 @@ usage() {
     echo "If no target is specified, defaults to go-apt-mirror."
     echo "  -v    verbose output"
     echo
+    echo "Note: For release builds with cross-compilation, use GoReleaser:"
+    echo "  goreleaser build --snapshot --clean"
+    echo "  goreleaser release --snapshot --clean"
+    echo
     exit 2
 }
 
@@ -49,8 +53,9 @@ XC_ARCH="${XC_ARCH:-$(go env GOARCH)}"
 echo "Building ${TARGET} ${VERSION} (${GIT_COMMIT}) built at ${BUILD_DATE}..."
 
 # Build with version information injected via ldflags
+# Note: These ldflags match what GoReleaser uses for consistency
 GOOS="${XC_OS}" GOARCH="${XC_ARCH}" go build \
     ${VERBOSE} \
-    -ldflags "-X main.version=${VERSION} -X main.commit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" \
+    -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" \
     -o "bin/${TARGET}" \
     ./cmd/${TARGET}
