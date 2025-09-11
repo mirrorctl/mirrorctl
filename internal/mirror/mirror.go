@@ -300,7 +300,7 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 
 	// extract file information from indices and download items
 	slog.Info("processing package files", "repo", m.id, "suite", suite)
-	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash, quiet, m)
+	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash, quiet, m, suite)
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}

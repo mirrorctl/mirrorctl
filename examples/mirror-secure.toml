@@ -1,6 +1,5 @@
 ####################
 ## Global Options ##
-####################
 
 dir = "/home/jcampbell/Public/mirror-dir/"
 max_conns = 10
@@ -8,7 +7,6 @@ max_conns = 10
 
 ##########################
 ## Mirror Configuration ##
-##########################
 
 [mirrors.slurm-ubuntu-noble]
 url = "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
@@ -41,19 +39,21 @@ pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
     keep_last = 3
     keep_within = "0d"
 
+[mirrors.rear]
+url = "https://download.opensuse.org/repositories/Archiving:/Backup:/Rear/"
+suites = ["xUbuntu_22.04/", "xUbuntu_24.04/"]
 
-#########################
-# LOGGING CONFIGURATION #
-#########################
+
+###########################
+## Logging Configuration ##
 
 [log]
-level = "info"    # debug, info, warn, error (... from most to least verbose)
-format = "plain"  # plain, json
+level = "info"    # debug, info, warn, error (... from most verbose to least verbose)
+format = "plain"  # plain, text, json
 
 
-#####################################
-# SNAPSHOT CONFIGURATION (OPTIONAL) #
-#####################################
+#######################################
+## SNAPSHOT CONFIGURATION (OPTIONAL) ##
 
 [snapshot]
 path = "/home/jcampbell/Public/mirror-snapshots/"
@@ -63,9 +63,9 @@ default_name_format = "2006-01-02T15-04-05Z" # Go time format
 keep_last = 60
 keep_within = "30d"
 
-#####################
-# TLS CONFIGURATION #
-#####################
+
+#######################
+## TLS CONFIGURATION ##
 
 [tls]
 # Minimum TLS version (1.2 or 1.3) - defaults to 1.2 for compatibility
@@ -96,3 +96,4 @@ cipher_suites = [
 
 # Custom server name for SNI (optional)
 # server_name = "packages.micorosft.com"
+

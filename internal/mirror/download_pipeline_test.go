@@ -585,15 +585,15 @@ SHA256: a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3
 	indexMap := make(map[string][]*apt.FileInfo)
 	itemMap := make(map[string]*apt.FileInfo)
 
-	err = mirror.parser.extractItems(indices, indexMap, itemMap, false)
+	err = mirror.parser.extractItems(indices, indexMap, itemMap, false, "test/")
 	if err != nil {
 		t.Errorf("extractItems failed: %v", err)
 	}
 
-	// Verify extracted items
+	// Verify extracted items (for flat repositories, paths should be prefixed with suite)
 	expectedFiles := []string{
-		"pool/main/t/test-package/test-package_1.0.0_amd64.deb",
-		"pool/main/a/another-package/another-package_2.0.0_amd64.deb",
+		"test/pool/main/t/test-package/test-package_1.0.0_amd64.deb",
+		"test/pool/main/a/another-package/another-package_2.0.0_amd64.deb",
 	}
 
 	if len(itemMap) != len(expectedFiles) {

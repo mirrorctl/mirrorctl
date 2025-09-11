@@ -37,7 +37,7 @@ func NewAPTParser(storage *Storage, config *MirrorConfig, mirrorID string) *APTP
 }
 
 // extractItems extracts file information from downloaded APT index files
-func (ap *APTParser) extractItems(indices []*apt.FileInfo, indexMap map[string][]*apt.FileInfo, itemMap map[string]*apt.FileInfo, byhash bool) error {
+func (ap *APTParser) extractItems(indices []*apt.FileInfo, indexMap map[string][]*apt.FileInfo, itemMap map[string]*apt.FileInfo, byhash bool, suite string) error {
 	for _, index := range indices {
 		path := index.Path()
 		if !ap.config.MatchingIndex(path) || !apt.IsSupported(path) {
@@ -66,7 +66,19 @@ func (ap *APTParser) extractItems(indices []*apt.FileInfo, indexMap map[string][
 				// already included in Release/InRelease
 				continue
 			}
-			itemMap[fipath] = fi
+			
+			// For flat repositories, package file paths need to be prefixed with the suite
+			// Example: suite="xUbuntu_24.04/" + fipath="amd64/rear_2.7-0_amd64.deb" 
+			// Result: "xUbuntu_24.04/amd64/rear_2.7-0_amd64.deb"
+			if isFlat(suite) && !apt.IsMeta(fipath) {
+				// Create a new FileInfo with the corrected path for flat repositories
+				// Use AddPrefix to prepend the suite path (without trailing slash)
+				correctedFI := fi.AddPrefix(strings.TrimSuffix(suite, "/"))
+				correctedPath := correctedFI.Path()
+				itemMap[correctedPath] = correctedFI
+			} else {
+				itemMap[fipath] = fi
+			}
 		}
 	}
 	return nil
@@ -391,12 +403,12 @@ func (ap *APTParser) isPackageFile(path string) bool {
 
 // downloadItems downloads package files listed in the indices
 func (ap *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
-	indices []*apt.FileInfo, byhash, quiet bool, m *Mirror) ([]*apt.FileInfo, error) {
+	indices []*apt.FileInfo, byhash, quiet bool, m *Mirror, suite string) ([]*apt.FileInfo, error) {
 
 	indexMap := make(map[string][]*apt.FileInfo)
 	itemMap := make(map[string]*apt.FileInfo)
 
-	err := ap.extractItems(indices, indexMap, itemMap, byhash)
+	err := ap.extractItems(indices, indexMap, itemMap, byhash, suite)
 	if err != nil {
 		return nil, err
 	}
