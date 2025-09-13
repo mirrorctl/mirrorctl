@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/cockroachdb/errors"
@@ -118,6 +119,67 @@ func formatError(err error, verbose bool) string {
 	return err.Error()
 }
 
+// analyzeUndecoded examines undecoded TOML keys and provides helpful suggestions
+func analyzeUndecoded(undecoded []toml.Key) (suggestions []string, unknown []string) {
+	// Group keys by their root section for mirror typos
+	mirrorGroups := make(map[string]int)
+
+	for _, key := range undecoded {
+		keyStr := key.String()
+
+		// Check for common "mirror" vs "mirrors" typo
+		if strings.HasPrefix(keyStr, "mirror.") && !strings.HasPrefix(keyStr, "mirrors.") {
+			// Extract the root section (e.g., "mirror.amlfs-noble" from "mirror.amlfs-noble.url")
+			parts := strings.Split(keyStr, ".")
+			if len(parts) >= 2 {
+				rootSection := parts[0] + "." + parts[1] // "mirror.amlfs-noble"
+				mirrorGroups[rootSection]++
+			}
+		} else {
+			// Keep track of keys we couldn't provide suggestions for
+			unknown = append(unknown, keyStr)
+		}
+	}
+
+	// Generate grouped suggestions
+	for rootSection, count := range mirrorGroups {
+		correctedSection := strings.Replace(rootSection, "mirror.", "mirrors.", 1)
+		if count == 1 {
+			suggestions = append(suggestions, fmt.Sprintf("Section '%s' should be '%s'", rootSection, correctedSection))
+		} else {
+			suggestions = append(suggestions, fmt.Sprintf("Section '%s' should be '%s' (affects %d subsections)", rootSection, correctedSection, count))
+		}
+	}
+
+	return suggestions, unknown
+}
+
+// formatUndecodedError builds a user-friendly error message for undecoded TOML keys
+func formatUndecodedError(undecoded []toml.Key) string {
+	suggestions, unknown := analyzeUndecoded(undecoded)
+
+	var errorMsg strings.Builder
+	if len(suggestions) > 0 {
+		errorMsg.WriteString("configuration contains sections that don't match expected structure:\n")
+		for _, suggestion := range suggestions {
+			errorMsg.WriteString("  • " + suggestion + "\n")
+		}
+		errorMsg.WriteString("\nNote: Configuration section names are case-sensitive and must match exactly.")
+	}
+
+	if len(unknown) > 0 {
+		if errorMsg.Len() > 0 {
+			errorMsg.WriteString("\n\nAdditionally, found unknown sections: ")
+		} else {
+			errorMsg.WriteString("configuration contains unknown sections: ")
+		}
+		errorMsg.WriteString(fmt.Sprintf("%v", unknown))
+		errorMsg.WriteString("\nThese sections don't match any expected configuration structure.")
+	}
+
+	return errorMsg.String()
+}
+
 func runMirror(cmd *cobra.Command, args []string) {
 	if versionFlag, _ := cmd.Flags().GetBool("version"); versionFlag {
 		fmt.Printf("go-apt-mirror %s\n", version)
@@ -146,8 +208,8 @@ func runMirror(cmd *cobra.Command, args []string) {
 
 	// Check for undecoded keys which might indicate parsing stopped early
 	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-		errorMsg := fmt.Sprintf("configuration contains undecoded/malformed sections: %v", undecoded)
-		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
+		errorMsg := formatUndecodedError(undecoded)
+		slog.Error("configuration validation failed", "error", errorMsg, "path", configPath)
 		if !verboseErrors {
 			slog.Info("run with --verbose-errors for detailed stack traces")
 		}
@@ -211,7 +273,8 @@ func runValidate(cmd *cobra.Command, args []string) {
 
 	// Check for undecoded keys which might indicate parsing stopped early
 	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-		slog.Error("configuration contains undecoded/malformed sections", "undecoded_keys", undecoded, "path", configPath)
+		errorMsg := formatUndecodedError(undecoded)
+		slog.Error("configuration validation failed", "error", errorMsg, "path", configPath)
 		os.Exit(1)
 	}
 
@@ -235,14 +298,14 @@ func runValidate(cmd *cobra.Command, args []string) {
 	}
 
 	if len(validationErrors) > 0 {
-		slog.Error("configuration validation failed")
+		slog.Error("the toml configuration file is not valid")
 		for _, err := range validationErrors {
 			slog.Error(err.Error())
 		}
 		os.Exit(1)
 	}
 
-	slog.Info("configuration is valid")
+	slog.Info("the toml configuration file passes validation checks")
 }
 
 func main() {
