@@ -129,13 +129,24 @@ func runMirror(cmd *cobra.Command, args []string) {
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 
 	config := mirror.NewConfig()
-	if _, err := toml.DecodeFile(configPath, config); err != nil {
+	meta, err := toml.DecodeFile(configPath, config)
+	if err != nil {
 		if os.IsNotExist(err) {
 			slog.Error("configuration file not found", "path", configPath)
 			slog.Info("Please create a configuration file at the default location or specify one with the --config flag.")
 			os.Exit(1)
 		}
 		errorMsg := formatError(err, verboseErrors)
+		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
+		if !verboseErrors {
+			slog.Info("run with --verbose-errors for detailed stack traces")
+		}
+		os.Exit(1)
+	}
+
+	// Check for undecoded keys which might indicate parsing stopped early
+	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		errorMsg := fmt.Sprintf("configuration contains undecoded/malformed sections: %v", undecoded)
 		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
 		if !verboseErrors {
 			slog.Info("run with --verbose-errors for detailed stack traces")
@@ -187,13 +198,20 @@ func runValidate(cmd *cobra.Command, args []string) {
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 
 	config := mirror.NewConfig()
-	if _, err := toml.DecodeFile(configPath, config); err != nil {
+	meta, err := toml.DecodeFile(configPath, config)
+	if err != nil {
 		if os.IsNotExist(err) {
 			slog.Error("configuration file not found", "path", configPath)
 			os.Exit(1)
 		}
 		errorMsg := formatError(err, verboseErrors)
 		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
+		os.Exit(1)
+	}
+
+	// Check for undecoded keys which might indicate parsing stopped early
+	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		slog.Error("configuration contains undecoded/malformed sections", "undecoded_keys", undecoded, "path", configPath)
 		os.Exit(1)
 	}
 
