@@ -8,6 +8,49 @@ max_conns = 10
 ##########################
 ## Mirror Configuration ##
 
+[mirrors.amlfs-noble]
+url = "https://packages.microsoft.com/repos/amlfs-noble/"
+suites = ["noble"]
+sections = ["main"]
+mirror_source = false
+architectures = ["amd64"]
+pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+
+    [mirrors.amlfs-noble.filters]
+    keep_versions = 1
+    exclude_patterns = ["code-insiders","code-exploration"]
+
+    [mirrors.amlfs-noble.snapshot]
+    default_name_format = "2006-01-02"
+
+    [mirrors.amlfs-noble.snapshot.prune]
+    keep_last = 3
+    keep_within = "0d"
+
+[mirrors.openenclave]
+url = "https://packages.microsoft.com/repos/openenclave/"
+suites = ["bionic"]
+sections = ["main"]
+architectures = ["amd64", "arm64"]
+pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+
+    [mirrors.openenclave.filters]
+    keep_versions = 1 
+    exclude_patterns = ["code-insiders","code-exploration"]
+
+    [mirrors.openenclave.snapshot]
+    default_name_format = "2006-01-02"
+
+    [mirrors.openenclave.snapshot.prune]
+    keep_last = 3
+    keep_within = "30d"
+
+[mirrors.rear]
+url = "https://download.opensuse.org/repositories/Archiving:/Backup:/Rear/"
+suites = ["xUbuntu_22.04/", "xUbuntu_24.04/"]
+no_pgp_check = true
+
+
 [mirrors.slurm-ubuntu-noble]
 url = "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
 suites = ["stable"]
@@ -16,32 +59,12 @@ mirror_source = false
 architectures = ["amd64"]
 pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
 
-    [mirror.slurm-ubuntu-noble.snapshot.prune]
+    [mirrors.slurm-ubuntu-noble.filters]
+    exclude_patterns = ["insiders"]
+
+    [mirrors.slurm-ubuntu-noble.snapshot.prune]
     keep_last = 25 
     keep_within = "60d"
-
-[mirrors.vscode]
-url = "https://packages.microsoft.com/repos/code/"
-suites = ["stable"]
-sections = ["main"]
-mirror_source = false
-architectures = ["amd64"]
-pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
-
-    [mirrors.vscode.filters]
-    keep_versions = 1 
-    exclude_patterns = ["code-insiders","code-exploration"]
-
-    [mirrors.vscode.snapshot]
-    default_name_format = "2006-01-02"
-
-    [mirror.vscode.snapshot.prune]
-    keep_last = 3
-    keep_within = "0d"
-
-[mirrors.rear]
-url = "https://download.opensuse.org/repositories/Archiving:/Backup:/Rear/"
-suites = ["xUbuntu_22.04/", "xUbuntu_24.04/"]
 
 
 ###########################
