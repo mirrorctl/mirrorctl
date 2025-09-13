@@ -92,10 +92,12 @@ keep_within = "30d"
 
 [tls]
 # Minimum TLS version (1.2 or 1.3) - defaults to 1.2 for compatibility
+# Use the `tls-check` command for each mirror you connect to. If all of your mirrors support
+# tls1.3, you can set this to 1.3.
 min_version = "1.2"
 
 # Maximum TLS version (1.2 or 1.3) - leave empty for latest
-max_version = "1.3"
+max_version = ""
 
 # WARNING: Only set to true for testing - this disables certificate verification!
 insecure_skip_verify = false
@@ -130,4 +132,3 @@ insecure_skip_verify = false
 # In almost all normal situations the application will automatically set the SNI based on the
 # mirror's URL. You can likely leave this commented out.
 # server_name = "packages.micorosft.com"
-
