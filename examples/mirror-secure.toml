@@ -101,22 +101,33 @@ max_version = "1.3"
 insecure_skip_verify = false
 
 # Custom CA certificate file (optional)
+# In short, the ca_cert_file is an escape hatch for environments where you are not connecting
+# directly to a public server using a publicly trusted certificate. The certificate file itself is
+# provided by the organization that is intercepting the traffic or hosting the private service.
+# For any standard connection to a public website from a normal unproxied network, this option
+# should remain commented out.
 # ca_cert_file = "/etc/ssl/certs/custom-ca.pem"
 
 # Client certificate for mutual TLS authentication (optional)
+# You would only use this if the server administrator explicitly told you that mTLS is required
+# and gave you the necessary files.
 # client_cert_file = "/etc/ssl/certs/client.pem"
 # client_key_file = "/etc/ssl/private/client.key"
 
 # Specify allowed cipher suites for extra security (optional)
-# Leave empty to use Go's secure defaults
-cipher_suites = [
-    "TLS_AES_256_GCM_SHA384",           # TLS 1.3
-    "TLS_CHACHA20_POLY1305_SHA256",     # TLS 1.3  
-    "TLS_AES_128_GCM_SHA256",           # TLS 1.3
-    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",    # TLS 1.2
-    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",  # TLS 1.2
-]
+# Leave commented to use Go's secure defaults
+# cipher_suites = [
+#     "TLS_AES_256_GCM_SHA384",                   # TLS 1.3
+#     "TLS_CHACHA20_POLY1305_SHA256",             # TLS 1.3  
+#     "TLS_AES_128_GCM_SHA256",                   # TLS 1.3
+#     "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",    # TLS 1.2
+#     "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",  # TLS 1.2
+# ]
+
 
 # Custom server name for SNI (optional)
+# It tells the server which website's certificate you are requesting.
+# In almost all normal situations the application will automatically set the SNI based on the
+# mirror's URL. You can likely leave this commented out.
 # server_name = "packages.micorosft.com"
 
