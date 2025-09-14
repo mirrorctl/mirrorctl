@@ -137,6 +137,11 @@ func (t *TLSConfig) Validate() error {
 		slog.Warn("TLS certificate verification is DISABLED - this is insecure and should only be used for testing")
 	}
 
+	// Validate that if one client cert/key is provided, the other is too
+	if (t.ClientCertFile != "" && t.ClientKeyFile == "") || (t.ClientCertFile == "" && t.ClientKeyFile != "") {
+		return errors.New("both client_cert_file and client_key_file must be specified for mutual TLS")
+	}
+
 	// Validate file paths exist if specified
 	if t.CACertFile != "" {
 		if _, err := os.Stat(t.CACertFile); err != nil {
