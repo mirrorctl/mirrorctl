@@ -188,6 +188,13 @@ func Run(config *Config, mirrors []string, noPGPCheck, quiet, dryRun bool) error
 		}
 	}()
 
+	// Clean up the lock file when the process completes
+	defer func() {
+		if err := os.Remove(lockFile); err != nil {
+			slog.Warn("failed to remove lock file", "error", err, "path", lockFile)
+		}
+	}()
+
 	if len(mirrors) == 0 {
 		for mirrorID := range config.Mirrors {
 			mirrors = append(mirrors, mirrorID)
