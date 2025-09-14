@@ -726,3 +726,57 @@ func TestSnapshotManager_PromoteErrors(t *testing.T) {
 		t.Error("should fail when nothing is staged")
 	}
 }
+
+func TestSnapshotInfo_Status(t *testing.T) {
+	tests := []struct {
+		name        string
+		isPublished bool
+		isStaged    bool
+		expected    string
+	}{
+		{
+			name:        "neither published nor staged",
+			isPublished: false,
+			isStaged:    false,
+			expected:    "",
+		},
+		{
+			name:        "published only",
+			isPublished: true,
+			isStaged:    false,
+			expected:    "(published)",
+		},
+		{
+			name:        "staged only",
+			isPublished: false,
+			isStaged:    true,
+			expected:    "(staged)",
+		},
+		{
+			name:        "both published and staged",
+			isPublished: true,
+			isStaged:    true,
+			expected:    "(published, staged)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := &SnapshotInfo{
+				Name:        "test-snapshot",
+				Mirror:      "test-mirror",
+				Path:        "/test/path",
+				CreatedAt:   time.Now(),
+				IsPublished: tt.isPublished,
+				IsStaged:    tt.isStaged,
+				Size:        1024,
+				FileCount:   5,
+			}
+
+			result := snapshot.Status()
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}

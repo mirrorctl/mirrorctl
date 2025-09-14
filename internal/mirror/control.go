@@ -18,14 +18,14 @@ const (
 	lockFilename = ".lock"
 )
 
-func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPCheck, quiet, dryRun bool) error {
+func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPCheck, quiet, dryRun bool) ([]*Mirror, error) {
 	timestamp := time.Now()
 
 	var mirrorList []*Mirror
 	for _, mirrorID := range mirrors {
 		mirror, err := NewMirror(timestamp, mirrorID, config, noPGPCheck, quiet, dryRun)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		mirrorList = append(mirrorList, mirror)
 	}
@@ -47,7 +47,7 @@ func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPC
 	}
 	err := group.Wait()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Print summary in dry-run mode
@@ -56,7 +56,7 @@ func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPC
 	} else {
 		slog.Info("update ends")
 	}
-	return nil
+	return mirrorList, nil
 }
 
 // printDryRunSummary prints a summary of disk usage for all mirrors
@@ -120,7 +120,11 @@ func gc(ctx context.Context, config *Config) error {
 		}
 
 		// Validate that the resolved symlink stays within safe boundaries
-		if err := validateSymlinkPath(filePath, config.Dir); err != nil {
+		var snapshotDir string
+		if config.Snapshot != nil {
+			snapshotDir = config.Snapshot.Path
+		}
+		if err := validateSymlinkPath(filePath, config.Dir, snapshotDir); err != nil {
 			return errors.Wrap(err, "gc: unsafe symlink "+dirEntry.Name())
 		}
 
@@ -151,6 +155,40 @@ func gc(ctx context.Context, config *Config) error {
 	return nil
 }
 
+// handleSnapshotting creates and stages snapshots for mirrors with publish_to_staging = true
+func handleSnapshotting(config *Config, mirrors []*Mirror, force bool) error {
+	snapshotManager := NewSnapshotManager(config.Snapshot, config.Dir)
+
+	for _, mirror := range mirrors {
+		mirrorConfig := config.Mirrors[mirror.id]
+
+		// Check if this mirror should be staged
+		if !mirrorConfig.PublishToStaging {
+			continue
+		}
+
+		slog.Info("creating snapshot for staging", "repo", mirror.id)
+
+		// Create snapshot with auto-generated name
+		snapshotName, err := snapshotManager.CreateSnapshot(mirror.id, "", force, mirrorConfig.Snapshot)
+		if err != nil {
+			slog.Error("failed to create snapshot", "repo", mirror.id, "error", err)
+			continue
+		}
+
+		// Publish to staging
+		err = snapshotManager.PublishSnapshotToStaging(mirror.id, snapshotName)
+		if err != nil {
+			slog.Error("failed to stage snapshot", "repo", mirror.id, "snapshot", snapshotName, "error", err)
+			continue
+		}
+
+		slog.Info("snapshot staged successfully", "repo", mirror.id, "snapshot", snapshotName)
+	}
+
+	return nil
+}
+
 // Run starts mirroring.
 //
 // The first thing to do is to acquire flock on the lock file.
@@ -158,7 +196,7 @@ func gc(ctx context.Context, config *Config) error {
 // mirrors is a list of mirror IDs defined in the configuration file
 // (or keys in c.Mirrors).  If mirrors is an empty list, all mirrors
 // will be updated.
-func Run(config *Config, mirrors []string, noPGPCheck, quiet, dryRun bool) error {
+func Run(config *Config, mirrors []string, noPGPCheck, quiet, dryRun, force bool) error {
 	lockFile := filepath.Join(config.Dir, lockFilename)
 	file, err := os.Open(lockFile)
 	switch {
@@ -203,13 +241,23 @@ func Run(config *Config, mirrors []string, noPGPCheck, quiet, dryRun bool) error
 
 	group, ctx := errgroup.WithContext(context.Background())
 	group.Go(func() error {
-		err := updateMirrors(ctx, config, mirrors, noPGPCheck, quiet, dryRun)
+		updatedMirrors, err := updateMirrors(ctx, config, mirrors, noPGPCheck, quiet, dryRun)
 		if err != nil {
 			if gcErr := gc(ctx, config); gcErr != nil {
 				err = errors.Wrap(err, gcErr.Error())
 			}
 			return err
 		}
+
+		// Handle snapshotting for mirrors with publish_to_staging = true
+		if !dryRun && config.Snapshot != nil {
+			err = handleSnapshotting(config, updatedMirrors, force)
+			if err != nil {
+				slog.Warn("snapshot creation failed", "error", err)
+				// Don't fail the entire sync for snapshot errors
+			}
+		}
+
 		return gc(ctx, config)
 	})
 	return group.Wait()

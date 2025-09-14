@@ -121,6 +121,9 @@ func init() {
 	rootCmd.PersistentFlags().Bool("verbose-errors", false, "show detailed error information including stack traces")
 	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "suppress all output except for errors")
 	rootCmd.PersistentFlags().Bool("dry-run", false, "calculate disk usage without downloading files")
+
+	// Add the --force flag specifically to the sync command
+	syncCmd.Flags().Bool("force", false, "overwrite snapshot if it already exists")
 }
 
 // formatError returns a human-friendly error message, optionally with stack trace
@@ -263,8 +266,9 @@ func runMirror(cmd *cobra.Command, args []string) {
 
 	noPGPCheck, _ := cmd.Flags().GetBool("no-pgp-check")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	force, _ := cmd.Flags().GetBool("force")
 
-	if err := mirror.Run(config, args, noPGPCheck, quiet, dryRun); err != nil {
+	if err := mirror.Run(config, args, noPGPCheck, quiet, dryRun, force); err != nil {
 		errorMsg := formatError(err, verboseErrors)
 		if verboseErrors {
 			slog.Error("mirror run failed", "error", errorMsg)

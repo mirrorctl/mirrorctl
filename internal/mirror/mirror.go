@@ -82,25 +82,33 @@ func IsValidID(id string) bool {
 	return validID.MatchString(id)
 }
 
-// validateSymlinkPath validates that a resolved symlink path stays within the allowed base directory.
+// validateSymlinkPath validates that a resolved symlink path stays within allowed directories.
 // This prevents symlink attacks that could access files outside the intended directory structure.
-func validateSymlinkPath(resolvedPath, baseDir string) error {
-	// Clean both paths to normalize them
+// It allows paths within baseDir or snapshotDir (if provided).
+func validateSymlinkPath(resolvedPath, baseDir string, allowedDirs ...string) error {
+	// Clean the resolved path
 	cleanResolved := filepath.Clean(resolvedPath)
-	cleanBase := filepath.Clean(baseDir)
 
 	// Check if the resolved path is within the base directory
+	cleanBase := filepath.Clean(baseDir)
 	rel, err := filepath.Rel(cleanBase, cleanResolved)
-	if err != nil {
-		return errors.Wrap(err, "validateSymlinkPath: failed to get relative path")
+	if err == nil && !strings.HasPrefix(rel, "..") && !strings.Contains(rel, ".."+string(filepath.Separator)) {
+		return nil // Path is within base directory
 	}
 
-	// If the relative path starts with "..", it's outside the base directory
-	if strings.HasPrefix(rel, "..") || strings.Contains(rel, ".."+string(filepath.Separator)) {
-		return errors.New("unsafe symlink: resolved path outside base directory")
+	// Check against additional allowed directories (e.g., snapshot directory)
+	for _, allowedDir := range allowedDirs {
+		if allowedDir == "" {
+			continue
+		}
+		cleanAllowed := filepath.Clean(allowedDir)
+		rel, err := filepath.Rel(cleanAllowed, cleanResolved)
+		if err == nil && !strings.HasPrefix(rel, "..") && !strings.Contains(rel, ".."+string(filepath.Separator)) {
+			return nil // Path is within allowed directory
+		}
 	}
 
-	return nil
+	return errors.New("unsafe symlink: resolved path outside allowed directories")
 }
 
 // Mirror implements mirroring logics.
@@ -143,7 +151,11 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 		return nil, errors.Wrap(err, mirrorID)
 	default:
 		// Validate that the resolved symlink stays within safe boundaries
-		if err := validateSymlinkPath(currentDir, directory); err != nil {
+		var snapshotDir string
+		if config.Snapshot != nil {
+			snapshotDir = config.Snapshot.Path
+		}
+		if err := validateSymlinkPath(currentDir, directory, snapshotDir); err != nil {
 			return nil, errors.Wrap(err, "NewMirror: "+mirrorID)
 		}
 

@@ -46,6 +46,23 @@ type SnapshotInfo struct {
 	FileCount   int
 }
 
+// Status returns a human-readable status string for the snapshot
+func (s *SnapshotInfo) Status() string {
+	var statusParts []string
+	if s.IsPublished {
+		statusParts = append(statusParts, "published")
+	}
+	if s.IsStaged {
+		statusParts = append(statusParts, "staged")
+	}
+
+	if len(statusParts) == 0 {
+		return ""
+	}
+
+	return "(" + strings.Join(statusParts, ", ") + ")"
+}
+
 // NewSnapshotManager creates a new snapshot manager
 func NewSnapshotManager(config *SnapshotConfig, livePath string) *SnapshotManager {
 	// Set defaults if not configured
@@ -440,13 +457,21 @@ func (sm *SnapshotManager) DeleteSnapshot(mirror, snapshotName string, force boo
 	// Check if snapshot is currently published
 	currentlyPublished, err := sm.GetCurrentlyPublished(mirror)
 	if err == nil && currentlyPublished == snapshotName {
-		return fmt.Errorf("cannot delete snapshot %s as it is currently published for mirror %s", snapshotName, mirror)
+		if !force {
+			return fmt.Errorf("cannot delete snapshot %s as it is currently published for mirror %s (use --force to override)", snapshotName, mirror)
+		}
+		// With --force, remove the live symlink first
+		os.Remove(sm.GetLivePath(mirror))
 	}
 
 	// Check if snapshot is currently staged
 	currentlyStaged, err := sm.GetCurrentlyStaged(mirror)
 	if err == nil && currentlyStaged == snapshotName {
-		return fmt.Errorf("cannot delete snapshot %s as it is currently staged for mirror %s", snapshotName, mirror)
+		if !force {
+			return fmt.Errorf("cannot delete snapshot %s as it is currently staged for mirror %s (use --force to override)", snapshotName, mirror)
+		}
+		// With --force, remove the staging symlink first
+		os.Remove(sm.GetStagingPath(mirror))
 	}
 
 	// Remove the snapshot directory
