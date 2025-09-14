@@ -13,6 +13,7 @@ url = "https://packages.microsoft.com/repos/amlfs-noble/"
 pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
 architectures = ["amd64"]
 mirror_source = false
+publish_to_staging = true
 sections = ["main"]
 suites = ["noble"]
 
@@ -24,8 +25,8 @@ suites = ["noble"]
     default_name_format = "2006-01-02"
 
     [mirrors.amlfs-noble.snapshot.prune]
-    keep_last = 3
-    keep_within = "10d"
+    keep_last = 30
+    keep_within = "2d"
 
 [mirrors.openenclave]
 url = "https://packages.microsoft.com/repos/openenclave/"
