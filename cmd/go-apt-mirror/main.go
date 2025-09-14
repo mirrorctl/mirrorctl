@@ -2,10 +2,14 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/cockroachdb/errors"
@@ -86,10 +90,26 @@ var validateCmd = &cobra.Command{
 	Run:   runValidate,
 }
 
+var tlsCheckCmd = &cobra.Command{
+	Use:   "tls-check [mirror-id]",
+	Short: "Check TLS configuration and capabilities for a mirror",
+	Long: `Performs a detailed TLS handshake and certificate check against the remote server for a configured mirror.
+
+This command helps diagnose TLS connection issues by testing supported TLS versions,
+negotiated cipher suites, and examining the certificate chain.
+
+Examples:
+  go-apt-mirror tls-check amlfs-noble
+  go-apt-mirror tls-check openenclave`,
+	Args: cobra.ExactArgs(1),
+	Run:  runTLSCheck,
+}
+
 func init() {
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(validateCmd)
+	rootCmd.AddCommand(tlsCheckCmd)
 
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", defaultConfigPath, "configuration file path")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "", "override log level (debug, info, warn, error)")
@@ -306,6 +326,157 @@ func runValidate(cmd *cobra.Command, args []string) {
 	}
 
 	slog.Info("the toml configuration file passes validation checks")
+}
+
+func runTLSCheck(cmd *cobra.Command, args []string) {
+	mirrorID := args[0]
+
+	// Load configuration file
+	config := mirror.NewConfig()
+	meta, err := toml.DecodeFile(configPath, config)
+	if err != nil {
+		if os.IsNotExist(err) {
+			slog.Error("configuration file not found", "path", configPath)
+			os.Exit(1)
+		}
+		slog.Error("failed to decode config file", "error", err, "path", configPath)
+		os.Exit(1)
+	}
+
+	// Check for undecoded keys
+	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		errorMsg := formatUndecodedError(undecoded)
+		slog.Error("configuration validation failed", "error", errorMsg, "path", configPath)
+		os.Exit(1)
+	}
+
+	// Find the target mirror
+	mirrorConfig, ok := config.Mirrors[mirrorID]
+	if !ok {
+		fmt.Printf("Mirror '%s' not found in configuration.\n\n", mirrorID)
+		fmt.Println("Available mirrors:")
+		var mirrorIDs []string
+		for id := range config.Mirrors {
+			mirrorIDs = append(mirrorIDs, id)
+		}
+		sort.Strings(mirrorIDs)
+		for _, id := range mirrorIDs {
+			fmt.Printf("  - %s\n", id)
+		}
+		os.Exit(1)
+	}
+
+	// Extract host and port from URL
+	host := mirrorConfig.URL.Hostname()
+	port := mirrorConfig.URL.Port()
+	if port == "" {
+		if mirrorConfig.URL.Scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+
+	fmt.Printf("Checking TLS status for mirror '%s' (%s:%s)...\n\n", mirrorID, host, port)
+
+	// Perform TLS version checks
+	checkTLSVersions(config, host, port)
+
+	// Perform detailed certificate check
+	checkCertificateDetails(config, host, port)
+
+	fmt.Println("TLS check complete.")
+}
+
+func checkTLSVersions(config *mirror.Config, host, port string) {
+	fmt.Println("[+] TLS Version Support:")
+
+	tlsVersions := []struct {
+		version uint16
+		name    string
+	}{
+		{tls.VersionTLS10, "TLS 1.0"},
+		{tls.VersionTLS11, "TLS 1.1"},
+		{tls.VersionTLS12, "TLS 1.2"},
+		{tls.VersionTLS13, "TLS 1.3"},
+	}
+
+	for _, tlsVer := range tlsVersions {
+		// Build TLS config from user's global settings
+		tlsConf, err := config.TLS.BuildTLSConfig()
+		if err != nil {
+			fmt.Printf("    %s: Error building TLS config (%v)\n", tlsVer.name, err)
+			continue
+		}
+
+		// Override version settings to test specific version
+		tlsConf.MinVersion = tlsVer.version
+		tlsConf.MaxVersion = tlsVer.version
+
+		// Attempt connection
+		conn, err := tls.Dial("tcp", net.JoinHostPort(host, port), tlsConf)
+		if err != nil {
+			fmt.Printf("    %s: Not Supported (%v)\n", tlsVer.name, err)
+		} else {
+			fmt.Printf("    %s: Supported\n", tlsVer.name)
+			conn.Close()
+		}
+	}
+	fmt.Println()
+}
+
+func checkCertificateDetails(config *mirror.Config, host, port string) {
+	fmt.Println("[+] Connection Details:")
+
+	// Build TLS config from user's global settings without version overrides
+	tlsConf, err := config.TLS.BuildTLSConfig()
+	if err != nil {
+		fmt.Printf("Error building TLS config: %v\n", err)
+		return
+	}
+
+	// Perform connection with best negotiated settings
+	conn, err := tls.Dial("tcp", net.JoinHostPort(host, port), tlsConf)
+	if err != nil {
+		fmt.Printf("Failed to establish connection: %v\n", err)
+		return
+	}
+	defer conn.Close()
+
+	connState := conn.ConnectionState()
+
+	// Print negotiated details
+	fmt.Printf("    Negotiated Version: %s\n", tlsVersionString(connState.Version))
+	fmt.Printf("    Negotiated Cipher:  %s\n", tls.CipherSuiteName(connState.CipherSuite))
+	fmt.Println()
+
+	// Print certificate chain
+	fmt.Println("[+] Server Certificate Chain:")
+	for i, cert := range connState.PeerCertificates {
+		fmt.Printf("    - Cert %d:\n", i)
+		fmt.Printf("      Subject:  %s\n", cert.Subject.CommonName)
+		fmt.Printf("      Issuer:   %s\n", cert.Issuer.CommonName)
+		fmt.Printf("      Expires:  %s\n", cert.NotAfter.Format(time.RFC3339))
+		if i < len(connState.PeerCertificates)-1 {
+			fmt.Println()
+		}
+	}
+	fmt.Println()
+}
+
+func tlsVersionString(version uint16) string {
+	switch version {
+	case tls.VersionTLS10:
+		return "TLS 1.0"
+	case tls.VersionTLS11:
+		return "TLS 1.1"
+	case tls.VersionTLS12:
+		return "TLS 1.2"
+	case tls.VersionTLS13:
+		return "TLS 1.3"
+	default:
+		return fmt.Sprintf("Unknown (0x%04x)", version)
+	}
 }
 
 func main() {
