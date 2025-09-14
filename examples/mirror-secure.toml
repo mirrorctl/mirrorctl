@@ -10,11 +10,11 @@ max_conns = 10
 
 [mirrors.amlfs-noble]
 url = "https://packages.microsoft.com/repos/amlfs-noble/"
-suites = ["noble"]
-sections = ["main"]
-mirror_source = false
-architectures = ["amd64"]
 pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+architectures = ["amd64"]
+mirror_source = false
+sections = ["main"]
+suites = ["noble"]
 
     [mirrors.amlfs-noble.filters]
     keep_versions = 1
@@ -25,14 +25,14 @@ pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
 
     [mirrors.amlfs-noble.snapshot.prune]
     keep_last = 3
-    keep_within = "0d"
+    keep_within = "10d"
 
 [mirrors.openenclave]
 url = "https://packages.microsoft.com/repos/openenclave/"
-suites = ["bionic"]
-sections = ["main"]
-architectures = ["amd64", "arm64"]
 pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+architectures = ["amd64", "arm64"]
+sections = ["main"]
+suites = ["bionic"]
 
     [mirrors.openenclave.filters]
     keep_versions = 1 
@@ -45,19 +45,19 @@ pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
     keep_last = 3
     keep_within = "30d"
 
+
 [mirrors.rear]
 url = "https://download.opensuse.org/repositories/Archiving:/Backup:/Rear/"
-suites = ["xUbuntu_22.04/", "xUbuntu_24.04/"]
 no_pgp_check = true
+suites = ["xUbuntu_22.04/", "xUbuntu_24.04/"]
 
 
 [mirrors.slurm-ubuntu-noble]
 url = "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
-suites = ["stable"]
-sections = ["main"]
-mirror_source = false
-architectures = ["amd64"]
 pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+architectures = ["amd64"]
+sections = ["main"]
+suites = ["stable"]
 
     [mirrors.slurm-ubuntu-noble.filters]
     exclude_patterns = ["insiders"]
@@ -72,7 +72,7 @@ pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
 
 [log]
 level = "info"    # debug, info, warn, error (... from most verbose to least verbose)
-format = "plain"  # plain, text, json
+format = "json"  # plain, text, json
 
 
 #######################################
