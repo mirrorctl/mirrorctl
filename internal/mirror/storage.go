@@ -150,15 +150,6 @@ func (s *Storage) StoreLink(fi *apt.FileInfo, fullpath string) error {
 		return errors.Wrap(err, "StoreLink")
 	}
 
-	s.mu.Lock()
-	_, ok := s.info[p]
-	if ok {
-		s.mu.Unlock()
-		return errors.New("already stored: " + p)
-	}
-	s.info[p] = fi
-	s.mu.Unlock()
-
 	fp := filepath.Join(s.dir, s.prefix, filepath.Clean(p))
 	d := filepath.Dir(fp)
 
@@ -167,7 +158,29 @@ func (s *Storage) StoreLink(fi *apt.FileInfo, fullpath string) error {
 		return err
 	}
 
-	return os.Link(fullpath, fp)
+	err = os.Link(fullpath, fp)
+	if err != nil && os.IsExist(err) {
+		// File already exists - this is expected during resume operations
+		// Remove the existing file and try again
+		if removeErr := os.Remove(fp); removeErr != nil {
+			return errors.Wrap(removeErr, "failed to remove existing file for resume")
+		}
+		err = os.Link(fullpath, fp)
+	}
+	if err != nil {
+		return err
+	}
+
+	// Only add to s.info after successful file creation
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.info[p]
+	if ok {
+		// Path already stored in this session - this is a duplicate
+		return errors.New("already stored: " + p)
+	}
+	s.info[p] = fi
+	return nil
 }
 
 // StoreLinkWithHash stores a hard link to a file into this storage
