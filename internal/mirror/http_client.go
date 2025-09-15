@@ -73,7 +73,10 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrorConfig,
 		targets = append(targets, fi.MD5SumPath())
 	}
 
-	for retries := 0; retries <= httpRetries; retries++ {
+	const maxDownloadAttempts = 15 // Safety limit for all retries and fallbacks
+	var lastErr error
+
+	for attempt := 0; attempt < maxDownloadAttempts; attempt++ {
 		if tempfile != nil {
 			closeAndRemoveFile(tempfile)
 			tempfile = nil
@@ -87,9 +90,10 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrorConfig,
 		default:
 		}
 
-		if retries > 0 {
-			slog.Warn("retrying download", "repo", h.mirrorID, "path", p)
-			time.Sleep(time.Duration(1<<(retries-1)) * time.Second)
+		if attempt > 0 {
+			slog.Warn("retrying download", "repo", h.mirrorID, "path", p, "attempt", attempt+1, "max_attempts", maxDownloadAttempts)
+			// Simple backoff, consider more advanced strategies if needed
+			time.Sleep(1 * time.Second)
 		}
 
 		// imitation apt-get command
@@ -109,41 +113,38 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrorConfig,
 		}
 		resp, err := h.client.Do(req.WithContext(ctx))
 		if err != nil {
-			if retries < httpRetries {
-				continue
-			}
-			r.err = err
-			return
+			lastErr = err
+			continue
 		}
-		defer closeRespBody(resp)
 
 		r.status = resp.StatusCode
 		if r.status >= 500 {
-			if retries < httpRetries {
-				slog.Debug("server error, retrying", "repo", h.mirrorID, "path", p, "status", r.status, "attempt", retries+1)
-				continue
-			}
+			lastErr = fmt.Errorf("server error %d", r.status)
+			closeRespBody(resp)
+			continue
 		}
 
 		if r.status != 200 {
+			// For non-500 errors (like 404), don't retry, just return the result.
+			// The caller will handle it.
+			closeRespBody(resp)
 			return
 		}
 
 		tempfile, err = h.storage.TempFile()
 		if err != nil {
 			r.err = err
+			closeRespBody(resp)
 			return
 		}
 		// Use response body directly
 		var reader io.Reader = resp.Body
 
 		fi2, err := apt.CopyWithFileInfo(tempfile, reader, p)
+		closeRespBody(resp) // Close body after reading
 		if err != nil {
-			if retries < httpRetries {
-				continue
-			}
-			r.err = err
-			return
+			lastErr = err
+			continue
 		}
 		err = tempfile.Sync()
 		if err != nil {
@@ -157,12 +158,15 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrorConfig,
 		}
 
 		if fi != nil && !fi.Same(fi2) {
+			lastErr = errors.New("invalid checksum for " + p)
 			if len(targets) > 1 {
+				// Move to next target for by-hash fallback
 				targets = targets[1:]
 				slog.Warn("try by-hash retrieval", "repo", h.mirrorID, "path", p, "target", targets[0])
 				continue
 			}
-			r.err = errors.New("invalid checksum for " + p)
+			// No more by-hash targets, return the checksum error
+			r.err = lastErr
 			return
 		}
 
@@ -173,9 +177,12 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrorConfig,
 		}
 
 		r.fi = fi2
-		return // success
+		r.err = nil // Explicitly set error to nil on success
+		return      // success
 	}
-	r.err = errors.New("download failed for " + p)
+
+	// If the loop completes, all attempts have failed.
+	r.err = fmt.Errorf("download failed for %s after %d attempts: %w", p, maxDownloadAttempts, lastErr)
 }
 
 // downloadFiles downloads a list of files concurrently.
@@ -229,13 +236,17 @@ func (h *HTTPClient) downloadFilesWithContext(ctx context.Context, mirrorConfig 
 // reuseOrDownload checks for existing files and downloads missing ones.
 func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrorConfig, fil []*apt.FileInfo,
 	byhash bool, results chan<- *dlResult) ([]*apt.FileInfo, error) {
-	// environment to manage downloading goroutines.
-	g, ctx := errgroup.WithContext(ctx)
-
-	// on return, wait for all DL goroutines then signal recvResult
 	// by closing results channel.
 	defer close(results)
-	defer g.Wait()
+
+	// This errgroup is just for managing the download workers
+	workerGroup, workerCtx := errgroup.WithContext(ctx)
+
+	// It is essential to wait for all workers to finish before reuseOrDownload returns.
+	// This ensures the results channel is not closed prematurely.
+	defer func() {
+		_ = workerGroup.Wait() // Wait for all download goroutines to complete
+	}()
 
 	reused := make([]*apt.FileInfo, 0, len(fil))
 
@@ -250,6 +261,8 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrorCo
 				slog.Debug("reusing existing file", "repo", h.mirrorID, "path", fi.Path())
 				err := h.storeLink(localfi, fullpath, byhash)
 				if err != nil {
+					// This is a critical error, but we must not block the pipeline.
+					// We can't return directly. We'll let the main errgroup handle it.
 					return nil, errors.Wrap(err, "storeLink")
 				}
 				reused = append(reused, localfi)
@@ -258,13 +271,14 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrorCo
 		}
 
 		select {
-		case <-ctx.Done():
+		case <-ctx.Done(): // Check the main context before starting a new worker
 			return nil, ctx.Err()
 		case <-h.semaphore:
 		}
 
-		g.Go(func() error {
-			h.download(ctx, mirrorConfig, fi.Path(), fi, byhash, results)
+		workerGroup.Go(func() error {
+			// Pass the worker context to the download function
+			h.download(workerCtx, mirrorConfig, fi.Path(), fi, byhash, results)
 			return nil
 		})
 	}
@@ -303,16 +317,24 @@ func (h *HTTPClient) handleResult(r *dlResult, allowMissing, byhash bool) (*apt.
 // recvResult receives and processes download results.
 func (h *HTTPClient) recvResult(allowMissing, byhash bool, results <-chan *dlResult) ([]*apt.FileInfo, error) {
 	var fil []*apt.FileInfo
+	var firstErr error
+
 	for r := range results {
 		fi, err := h.handleResult(r, allowMissing, byhash)
 		if err != nil {
-			return nil, err
+			// Don't return immediately. Store the first error and continue draining the channel
+			// to prevent deadlocking the sender goroutines.
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 		if fi != nil {
 			fil = append(fil, fi)
 		}
 	}
-	return fil, nil
+
+	// Return the collected files and the first error that occurred.
+	return fil, firstErr
 }
 
 // countReusableFiles counts how many files can be reused vs need downloading.

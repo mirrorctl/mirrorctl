@@ -158,8 +158,11 @@ func TestDownloadBasic(t *testing.T) {
 	ctx := context.Background()
 	results := make(chan *dlResult, 1)
 
-	// Start download
-	go mirror.httpClient.download(ctx, mirror.mc, "test/file.txt", fi, false, results)
+	// Start download (acquire semaphore token first)
+	go func() {
+		<-mirror.httpClient.semaphore
+		mirror.httpClient.download(ctx, mirror.mc, "test/file.txt", fi, false, results)
+	}()
 
 	// Get result
 	result := <-results
@@ -212,7 +215,10 @@ func TestDownloadRetryLogic(t *testing.T) {
 	results := make(chan *dlResult, 1)
 
 	// Start download (this should retry multiple times and then fail)
-	go mirror.httpClient.download(ctx, mirror.mc, "test/retry.txt", fi, false, results)
+	go func() {
+		<-mirror.httpClient.semaphore
+		mirror.httpClient.download(ctx, mirror.mc, "test/retry.txt", fi, false, results)
+	}()
 
 	// Get result
 	result := <-results
@@ -259,7 +265,10 @@ func TestDownloadContextCancellation(t *testing.T) {
 	results := make(chan *dlResult, 1)
 
 	// Start download
-	go mirror.httpClient.download(ctx, mirror.mc, "test/slow.txt", nil, false, results)
+	go func() {
+		<-mirror.httpClient.semaphore
+		mirror.httpClient.download(ctx, mirror.mc, "test/slow.txt", nil, false, results)
+	}()
 
 	// Get result
 	result := <-results
@@ -303,7 +312,10 @@ func TestDownloadByHashFallback(t *testing.T) {
 	results := make(chan *dlResult, 1)
 
 	// Start download with by-hash enabled
-	go mirror.httpClient.download(ctx, mirror.mc, "test/byhash.txt", fi, true, results)
+	go func() {
+		<-mirror.httpClient.semaphore
+		mirror.httpClient.download(ctx, mirror.mc, "test/byhash.txt", fi, true, results)
+	}()
 
 	// Get result
 	result := <-results
@@ -350,7 +362,10 @@ func TestDownloadChecksumValidation(t *testing.T) {
 	results := make(chan *dlResult, 1)
 
 	// Start download
-	go mirror.httpClient.download(ctx, mirror.mc, "test/checksum.txt", fi, false, results)
+	go func() {
+		<-mirror.httpClient.semaphore
+		mirror.httpClient.download(ctx, mirror.mc, "test/checksum.txt", fi, false, results)
+	}()
 
 	// Get result
 	result := <-results
@@ -431,7 +446,7 @@ func TestStoreLinkBasic(t *testing.T) {
 	}
 
 	// Test storeLink with hash
-	err = mirror.storage.StoreLink(fi, testFile.Name())
+	err = mirror.storage.StoreLinkWithHash(fi, testFile.Name())
 	if err != nil {
 		t.Errorf("storeLink with hash failed: %v", err)
 	}
@@ -802,7 +817,10 @@ func TestRealRepositoryDownloadPipeline(t *testing.T) {
 
 	// Test downloading the main Release file
 	results := make(chan *dlResult, 1)
-	go mirror.httpClient.download(ctx, mirror.mc, releaseFiles[0], nil, false, results)
+	go func() {
+		<-mirror.httpClient.semaphore
+		mirror.httpClient.download(ctx, mirror.mc, releaseFiles[0], nil, false, results)
+	}()
 
 	result := <-results
 	if result.err != nil {
@@ -849,7 +867,10 @@ func TestDownloadPipelineErrorScenarios(t *testing.T) {
 	// Test 1: Non-existent file
 	server.AddResponse("nonexistent.txt", http.StatusNotFound, nil, 0)
 	results := make(chan *dlResult, 1)
-	go mirror.httpClient.download(ctx, mirror.mc, "nonexistent.txt", nil, false, results)
+	go func() {
+		<-mirror.httpClient.semaphore
+		mirror.httpClient.download(ctx, mirror.mc, "nonexistent.txt", nil, false, results)
+	}()
 	result := <-results
 
 	if result.err != nil {
@@ -862,7 +883,10 @@ func TestDownloadPipelineErrorScenarios(t *testing.T) {
 	// Test 2: Server error with max retries
 	server.AddResponse("server-error.txt", http.StatusInternalServerError, nil, 0)
 	results = make(chan *dlResult, 1)
-	go mirror.httpClient.download(ctx, mirror.mc, "server-error.txt", nil, false, results)
+	go func() {
+		<-mirror.httpClient.semaphore
+		mirror.httpClient.download(ctx, mirror.mc, "server-error.txt", nil, false, results)
+	}()
 	result = <-results
 
 	if result.status != http.StatusInternalServerError {
