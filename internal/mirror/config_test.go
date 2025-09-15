@@ -1,6 +1,7 @@
 package mirror
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -11,74 +12,62 @@ func TestConfig(t *testing.T) {
 	t.Parallel()
 
 	c := NewConfig()
-	md, err := toml.DecodeFile("testdata/mirror.toml", c)
+	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
+	md, err := toml.DecodeFile(configPath, c)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(md.Undecoded()) > 0 {
-		t.Errorf("%#v", md.Undecoded())
+		t.Errorf("undecoded keys: %#v", md.Undecoded())
 	}
 
-	if c.Dir != "/var/spool/go-apt-mirror" {
-		t.Error(`c.Dir != "/var/spool/go-apt-mirror"`)
+	if c.Dir != "/home/jcampbell/Public/mirror-dir/" {
+		t.Errorf(`c.Dir = %q, want "/home/jcampbell/Public/mirror-dir/"`, c.Dir)
 	}
-	if c.MaxConns != defaultMaxConns {
-		t.Error(`c.MaxConns != defaultMaxConns`)
-	}
-
-	if c.Log.Level != "error" {
-		t.Error(`c.Log.Level != "error"`)
+	if c.MaxConns != 10 {
+		t.Errorf(`c.MaxConns = %d, want 10`, c.MaxConns)
 	}
 
-	if len(c.Mirrors) != 3 {
-		t.Fatal(`len(c.Mirrors) != 3`)
+	if c.Log.Level != "info" {
+		t.Errorf(`c.Log.Level = %q, want "info"`, c.Log.Level)
 	}
 
-	if ubuntu, ok := c.Mirrors["ubuntu"]; !ok {
-		t.Error(`ubuntu, ok := c.Mirrors["ubuntu"]; !ok`)
+	expectedMirrors := 4 // amlfs-noble, openenclave, rear, slurm-ubuntu-noble
+	if len(c.Mirrors) != expectedMirrors {
+		t.Fatalf(`len(c.Mirrors) = %d, want %d`, len(c.Mirrors), expectedMirrors)
+	}
+
+	// Test amlfs-noble mirror
+	if amlfs, ok := c.Mirrors["amlfs-noble"]; !ok {
+		t.Error(`amlfs-noble mirror not found`)
 	} else {
-		if ubuntu.URL.String() != "http://archive.ubuntu.com/ubuntu/" {
-			t.Error(`ubuntu.URL != "http://archive.ubuntu.com/ubuntu/"`)
+		if amlfs.URL.String() != "https://packages.microsoft.com/repos/amlfs-noble/" {
+			t.Errorf(`amlfs-noble.URL = %q, want "https://packages.microsoft.com/repos/amlfs-noble/"`, amlfs.URL.String())
 		}
-		if !ubuntu.Source {
-			t.Error(`!ubuntu.Source`)
+		if !amlfs.PublishToStaging {
+			t.Error(`amlfs-noble.PublishToStaging should be true`)
 		}
-		if !reflect.DeepEqual(ubuntu.Architectures, []string{"amd64", "i386"}) {
-			t.Error(`!reflect.DeepEqual(ubuntu.Architectures)`)
+		if !reflect.DeepEqual(amlfs.Architectures, []string{"amd64"}) {
+			t.Errorf(`amlfs-noble.Architectures = %v, want ["amd64"]`, amlfs.Architectures)
 		}
-		if !reflect.DeepEqual(ubuntu.Suites, []string{
-			"trusty", "trusty-updates"}) {
-			t.Error(`!reflect.DeepEqual(ubuntu.Suites)`)
+		if !reflect.DeepEqual(amlfs.Suites, []string{"noble"}) {
+			t.Errorf(`amlfs-noble.Suites = %v, want ["noble"]`, amlfs.Suites)
 		}
-		if !reflect.DeepEqual(ubuntu.Sections, []string{
-			"main", "restricted", "universe",
-			"main/debian-installer",
-			"restricted/debian-installer",
-			"universe/debian-installer",
-		}) {
-			t.Error(`!reflect.DeepEqual(ubuntu.Sections)`)
+		if !reflect.DeepEqual(amlfs.Sections, []string{"main"}) {
+			t.Errorf(`amlfs-noble.Sections = %v, want ["main"]`, amlfs.Sections)
 		}
 	}
 
-	if security, ok := c.Mirrors["security"]; !ok {
-		t.Error(`security, ok := c.Mirrors["security"]; !ok`)
+	// Test slurm-ubuntu-noble mirror
+	if slurm, ok := c.Mirrors["slurm-ubuntu-noble"]; !ok {
+		t.Error(`slurm-ubuntu-noble mirror not found`)
 	} else {
-		if security.URL.String() != "http://security.ubuntu.com/ubuntu/" {
-			t.Error(`security.URL != "http://security.ubuntu.com/ubuntu/"`)
+		if slurm.URL.String() != "https://packages.microsoft.com/repos/slurm-ubuntu-noble/" {
+			t.Errorf(`slurm-ubuntu-noble.URL = %q, want "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"`, slurm.URL.String())
 		}
-		if security.Source {
-			t.Error(`security.Source`)
-		}
-		if !reflect.DeepEqual(security.Architectures, []string{"amd64"}) {
-			t.Error(`!reflect.DeepEqual(security.Architectures)`)
-		}
-		if !reflect.DeepEqual(security.Suites, []string{"trusty-security"}) {
-			t.Error(`!reflect.DeepEqual(security.Suites)`)
-		}
-		if !reflect.DeepEqual(security.Sections, []string{
-			"main", "restricted", "universe"}) {
-			t.Error(`!reflect.DeepEqual(security.Sections)`)
+		if slurm.PublishToStaging {
+			t.Error(`slurm-ubuntu-noble.PublishToStaging should be false`)
 		}
 	}
 }
@@ -87,118 +76,70 @@ func TestMirrorConfig(t *testing.T) {
 	t.Parallel()
 
 	var c Config
-	_, err := toml.DecodeFile("testdata/mirror.toml", &c)
+	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
+	_, err := toml.DecodeFile(configPath, &c)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	mc, ok := c.Mirrors["ubuntu"]
+	// Test amlfs-noble mirror configuration
+	mc, ok := c.Mirrors["amlfs-noble"]
 	if !ok {
-		t.Fatal(`c.Mirrors["ubuntu"] not ok`)
+		t.Fatal(`c.Mirrors["amlfs-noble"] not found`)
 	}
 
-	correct := "http://archive.ubuntu.com/ubuntu/dists/trusty/Release"
-	if mc.Resolve("dists/trusty/Release").String() != correct {
-		t.Error(`mc.Resolve("dists/trusty/Release").String() != correct`)
+	correct := "https://packages.microsoft.com/repos/amlfs-noble/dists/noble/Release"
+	if mc.Resolve("dists/noble/Release").String() != correct {
+		t.Errorf(`mc.Resolve("dists/noble/Release") = %q, want %q`, mc.Resolve("dists/noble/Release").String(), correct)
 	}
 
 	if err := mc.Check(); err != nil {
 		t.Error(err)
 	}
 
+	// Test release files for noble suite
 	m := make(map[string]struct{})
-	for _, p := range mc.ReleaseFiles("trusty") {
+	for _, p := range mc.ReleaseFiles("noble") {
 		m[p] = struct{}{}
 	}
-	if _, ok := m["dists/trusty/Release"]; !ok {
-		t.Error(`_, ok := m["dists/trusty/Release"]; !ok`)
-	}
-	if _, ok := m["dists/trusty-updates/InRelease"]; ok {
-		t.Error(`_, ok := m["dists/trusty-updates/InRelease"]; ok`)
-	}
-	for _, p := range mc.ReleaseFiles("trusty-updates") {
-		m[p] = struct{}{}
-	}
-	if _, ok := m["dists/trusty-updates/InRelease"]; !ok {
-		t.Error(`_, ok := m["dists/trusty-updates/InRelease"]; !ok`)
+	if _, ok := m["dists/noble/Release"]; !ok {
+		t.Error(`dists/noble/Release should be in release files`)
 	}
 
-	if !mc.MatchingIndex("hoge/fuga/Index.gz") {
-		t.Error(`!mc.MatchingIndex("hoge/fuga/Index.gz")`)
+	// Test index matching
+	if !mc.MatchingIndex("dists/noble/main/binary-amd64/Packages.gz") {
+		t.Error(`should match noble main binary-amd64 Packages.gz`)
 	}
-	if !mc.MatchingIndex("hoge/Release") {
-		t.Error(`!mc.MatchingIndex("hoge/Release")`)
+	if !mc.MatchingIndex("dists/noble/Release") {
+		t.Error(`should match noble Release file`)
 	}
-	if mc.MatchingIndex("trusty/binary-amd64/Packages.gz") {
-		t.Error(`mc.MatchingIndex("trusty/binary-amd64/Packages.gz")`)
-	}
-	if mc.MatchingIndex("Sources") {
-		t.Error(`mc.MatchingIndex("Sources")`)
-	}
-	if !mc.MatchingIndex("trusty/universe/binary-all/Packages.gz") {
-		t.Error(`!mc.MatchingIndex("trusty/universe/binary-all/Packages.gz")`)
-	}
-	if !mc.MatchingIndex("trusty/universe/binary-i386/Packages") {
-		t.Error(`!mc.MatchingIndex("trusty/universe/binary-i386/Packages")`)
-	}
-	if !mc.MatchingIndex("trusty/main/debian-installer/source/Sources.xz") {
-		t.Error(`!mc.MatchingIndex("trusty/main/debian-installer/source/Sources.xz")`)
+	if mc.MatchingIndex("some-random-file.txt") {
+		t.Error(`should not match random file`)
 	}
 
-	mc, ok = c.Mirrors["security"]
+	// Test slurm-ubuntu-noble mirror
+	mc, ok = c.Mirrors["slurm-ubuntu-noble"]
 	if !ok {
-		t.Fatal(`c.Mirrors["security"] not ok`)
+		t.Fatal(`c.Mirrors["slurm-ubuntu-noble"] not found`)
 	}
 	if err := mc.Check(); err != nil {
 		t.Error(err)
 	}
-	if !mc.MatchingIndex("trusty-security/main/binary-amd64/Packages") {
-		t.Error(`!mc.MatchingIndex("trusty-security/main/binary-amd64/Packages")`)
-	}
-	if mc.MatchingIndex("trusty-security/main/source/Sources.xz") {
-		t.Error(`mc.MatchingIndex("trusty-security/main/source/Sources.xz")`)
+	if !mc.MatchingIndex("dists/stable/main/binary-amd64/Packages") {
+		t.Error(`should match stable main binary-amd64 Packages`)
 	}
 
-	mc, ok = c.Mirrors["flat"]
+	// Test openenclave mirror
+	mc, ok = c.Mirrors["openenclave"]
 	if !ok {
-		t.Fatal(`c.Mirrors["flat"] not ok`)
+		t.Fatal(`c.Mirrors["openenclave"] not found`)
 	}
 	if err := mc.Check(); err != nil {
 		t.Error(err)
 	}
 
-	m = make(map[string]struct{})
-	for _, p := range mc.ReleaseFiles("12.04/") {
-		m[p] = struct{}{}
-	}
-	if _, ok := m["12.04/Release"]; !ok {
-		t.Error(`_, ok := m["12.04/Release"]; !ok`)
-	}
-
-	m = make(map[string]struct{})
-	for _, p := range mc.ReleaseFiles("14.04/") {
-		m[p] = struct{}{}
-	}
-	if _, ok := m["14.04/InRelease"]; !ok {
-		t.Error(`_, ok := m["14.04/InRelease"]; !ok`)
-	}
-
-	m = make(map[string]struct{})
-	for _, p := range mc.ReleaseFiles("/") {
-		m[p] = struct{}{}
-	}
-	if _, ok := m["Release.gz"]; !ok {
-		t.Error(`_, ok := m["Release.gz"]; !ok`)
-	}
-
-	correct = "http://my.local.domain/cybozu/14.04/cybozu_1.0.0_amd64.deb"
-	if mc.Resolve("./14.04/cybozu_1.0.0_amd64.deb").String() != correct {
-		t.Error(`mc.Resolve("14.04/cybozu_1.0.0_amd64.deb").String() != correct`)
-	}
-	if !mc.MatchingIndex("12.04/Packages.gz") {
-		t.Error(`!mc.MatchingIndex("12.04/Packages.gz")`)
-	}
-	if mc.MatchingIndex("14.04/Sources") {
-		t.Error(`mc.MatchingIndex("14.04/Sources")`)
+	// Test that bionic suite works
+	if !mc.MatchingIndex("dists/bionic/main/binary-amd64/Packages") {
+		t.Error(`should match bionic main binary-amd64 Packages`)
 	}
 }

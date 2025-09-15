@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -778,5 +779,149 @@ func TestSnapshotInfo_Status(t *testing.T) {
 				t.Errorf("expected %q, got %q", tt.expected, result)
 			}
 		})
+	}
+}
+
+func TestSnapshotManager_DeleteWithForce(t *testing.T) {
+	// Create temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "snapshot-test-force-")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test mirror data structure
+	livePath := filepath.Join(tmpDir, "live")
+	mirrorDataPath := filepath.Join(tmpDir, "mirror-data", "test-mirror")
+	testFile := filepath.Join(mirrorDataPath, "test.txt")
+
+	if err := os.MkdirAll(mirrorDataPath, 0755); err != nil {
+		t.Fatalf("failed to create mirror data dir: %v", err)
+	}
+
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Create snapshot manager
+	config := &SnapshotConfig{
+		Path: filepath.Join(tmpDir, "snapshots"),
+	}
+	sm := NewSnapshotManager(config, livePath)
+
+	// Create live symlink and snapshots
+	os.MkdirAll(livePath, 0755)
+	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+
+	_, err = sm.CreateSnapshot("test-mirror", "snapshot-published", false, nil)
+	if err != nil {
+		t.Fatalf("failed to create published snapshot: %v", err)
+	}
+
+	_, err = sm.CreateSnapshot("test-mirror", "snapshot-staged", false, nil)
+	if err != nil {
+		t.Fatalf("failed to create staged snapshot: %v", err)
+	}
+
+	_, err = sm.CreateSnapshot("test-mirror", "snapshot-both", false, nil)
+	if err != nil {
+		t.Fatalf("failed to create both snapshot: %v", err)
+	}
+
+	// Remove the temporary symlink
+	os.Remove(filepath.Join(livePath, "test-mirror"))
+
+	// Test 1: Published snapshot - should fail without force, succeed with force
+	err = sm.PublishSnapshot("test-mirror", "snapshot-published")
+	if err != nil {
+		t.Fatalf("failed to publish snapshot: %v", err)
+	}
+
+	// Should fail without force
+	err = sm.DeleteSnapshot("test-mirror", "snapshot-published", false)
+	if err == nil {
+		t.Error("deleting published snapshot should fail without --force")
+	}
+	if !strings.Contains(err.Error(), "use --force to override") {
+		t.Errorf("error message should suggest --force, got: %v", err)
+	}
+
+	// Should succeed with force and remove live symlink
+	err = sm.DeleteSnapshot("test-mirror", "snapshot-published", true)
+	if err != nil {
+		t.Errorf("deleting published snapshot should succeed with --force: %v", err)
+	}
+
+	// Verify live symlink was removed
+	liveMirrorPath := sm.GetLivePath("test-mirror")
+	if _, err := os.Lstat(liveMirrorPath); !os.IsNotExist(err) {
+		t.Error("live symlink should be removed when force-deleting published snapshot")
+	}
+
+	// Test 2: Staged snapshot - should fail without force, succeed with force
+	err = sm.PublishSnapshotToStaging("test-mirror", "snapshot-staged")
+	if err != nil {
+		t.Fatalf("failed to stage snapshot: %v", err)
+	}
+
+	// Should fail without force
+	err = sm.DeleteSnapshot("test-mirror", "snapshot-staged", false)
+	if err == nil {
+		t.Error("deleting staged snapshot should fail without --force")
+	}
+	if !strings.Contains(err.Error(), "use --force to override") {
+		t.Errorf("error message should suggest --force, got: %v", err)
+	}
+
+	// Should succeed with force and remove staging symlink
+	err = sm.DeleteSnapshot("test-mirror", "snapshot-staged", true)
+	if err != nil {
+		t.Errorf("deleting staged snapshot should succeed with --force: %v", err)
+	}
+
+	// Verify staging symlink was removed
+	stagingPath := sm.GetStagingPath("test-mirror")
+	if _, err := os.Lstat(stagingPath); !os.IsNotExist(err) {
+		t.Error("staging symlink should be removed when force-deleting staged snapshot")
+	}
+
+	// Test 3: Both published and staged - should remove both symlinks
+	err = sm.PublishSnapshot("test-mirror", "snapshot-both")
+	if err != nil {
+		t.Fatalf("failed to publish snapshot: %v", err)
+	}
+
+	err = sm.PublishSnapshotToStaging("test-mirror", "snapshot-both")
+	if err != nil {
+		t.Fatalf("failed to stage snapshot: %v", err)
+	}
+
+	// Should fail without force
+	err = sm.DeleteSnapshot("test-mirror", "snapshot-both", false)
+	if err == nil {
+		t.Error("deleting published+staged snapshot should fail without --force")
+	}
+
+	// Should succeed with force and remove both symlinks
+	err = sm.DeleteSnapshot("test-mirror", "snapshot-both", true)
+	if err != nil {
+		t.Errorf("deleting published+staged snapshot should succeed with --force: %v", err)
+	}
+
+	// Verify both symlinks were removed
+	if _, err := os.Lstat(liveMirrorPath); !os.IsNotExist(err) {
+		t.Error("live symlink should be removed when force-deleting published+staged snapshot")
+	}
+	if _, err := os.Lstat(stagingPath); !os.IsNotExist(err) {
+		t.Error("staging symlink should be removed when force-deleting published+staged snapshot")
+	}
+
+	// Verify all snapshots were actually deleted
+	snapshots, err := sm.ListSnapshots("test-mirror")
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %v", err)
+	}
+	if len(snapshots) != 0 {
+		t.Errorf("expected no snapshots after force deletion, got %d", len(snapshots))
 	}
 }

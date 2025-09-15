@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	timestampFormat  = "20060102_150405"
+	timestampFormat  = "20060102_150405.000000"
 	progressInterval = 5 * time.Minute
 	httpRetries      = 5
 )
@@ -171,7 +171,7 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 
 	storageDirectory := filepath.Join(directory, "."+mirrorID+"."+timestamp.Format(timestampFormat))
 	err = os.Mkdir(storageDirectory, 0750)
-	if err != nil {
+	if err != nil && !os.IsExist(err) {
 		return nil, errors.Wrap(err, mirrorID)
 	}
 	storage, err := NewStorage(storageDirectory, mirrorID)

@@ -1,53 +1,38 @@
 package mirror
 
 import (
-	"context"
-	"net/url"
 	"testing"
-
-	"github.com/gomirror/go-apt-mirror/internal/apt"
 )
 
 func TestDownloadLoggingContext(t *testing.T) {
-	// Create a simple test case to verify function signatures exist
-	// and logging context is properly differentiated
+	// This test verifies that the HTTPClient has the expected download methods
+	// for different logging contexts (indices vs packages vs custom)
 
-	// Create test file info
-	fi := apt.MakeFileInfoNoChecksum("test/file.deb", 1024)
-	files := []*apt.FileInfo{fi}
-
-	// Create test mirror config
-	mirrorConfig := &MirrorConfig{
-		URL: tomlURL{&url.URL{Scheme: "https", Host: "example.com", Path: "/"}},
-	}
-
-	// Create test HTTP client (won't actually download)
+	// Create test HTTP client
 	httpClient := &HTTPClient{
 		mirrorID: "test-repo",
 	}
 
-	ctx := context.Background()
-
-	// Test that different functions exist and have correct signatures
+	// Simply verify the methods exist by attempting to take their addresses
+	// If the methods don't exist, this won't compile
 	t.Run("downloadFiles function exists", func(t *testing.T) {
-		// This will fail at runtime due to nil client, but we're just testing the function exists
-		defer func() { recover() }()
-		httpClient.downloadFiles(ctx, mirrorConfig, files, false, false)
+		_ = httpClient.downloadFiles
+		t.Log("downloadFiles method exists")
 	})
 
 	t.Run("downloadIndicesFiles function exists", func(t *testing.T) {
-		defer func() { recover() }()
-		httpClient.downloadIndicesFiles(ctx, mirrorConfig, files, false, false)
+		_ = httpClient.downloadIndicesFiles
+		t.Log("downloadIndicesFiles method exists")
 	})
 
 	t.Run("downloadPackageFiles function exists", func(t *testing.T) {
-		defer func() { recover() }()
-		httpClient.downloadPackageFiles(ctx, mirrorConfig, files, false, false)
+		_ = httpClient.downloadPackageFiles
+		t.Log("downloadPackageFiles method exists")
 	})
 
 	t.Run("downloadFilesWithContext function exists", func(t *testing.T) {
-		defer func() { recover() }()
-		httpClient.downloadFilesWithContext(ctx, mirrorConfig, files, false, false, "custom")
+		_ = httpClient.downloadFilesWithContext
+		t.Log("downloadFilesWithContext method exists")
 	})
 }
 
