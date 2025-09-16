@@ -1,4 +1,4 @@
-module github.com/gomirror/go-apt-mirror
+module github.com/mirrorctl/mirrorctl
 
 require (
 	github.com/BurntSushi/toml v1.5.0

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gomirror/go-apt-mirror/internal/apt"
+	"github.com/mirrorctl/mirrorctl/internal/apt"
 )
 
 func makeFileInfo(path string, data []byte) (*apt.FileInfo, error) {

@@ -1,10 +1,10 @@
-# GoReleaser configuration for go-apt-mirror
+# GoReleaser configuration for mirrorctl
 # See https://goreleaser.com for more details
 
 version: 2
 
 # Project metadata
-project_name: go-apt-mirror
+project_name: mirrorctl
 
 before:
   hooks:
@@ -14,9 +14,9 @@ before:
     - go test ./...
 
 builds:
-  - id: go-apt-mirror
-    main: ./cmd/go-apt-mirror
-    binary: go-apt-mirror
+  - id: mirrorctl
+    main: ./cmd/mirrorctl
+    binary: mirrorctl
     
     # Build for multiple platforms
     goos:
@@ -54,7 +54,7 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  - ids: [ go-apt-mirror ]
+  - ids: [ mirrorctl ]
 
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     
@@ -66,7 +66,7 @@ archives:
     files:
       - README.md
       - LICENSE
-      - cmd/go-apt-mirror/USAGE.md
+      - cmd/mirrorctl/USAGE.md
       - examples/**/*
       - TLS_SECURITY.md
 
@@ -104,8 +104,8 @@ changelog:
 # GitHub release configuration
 release:
   github:
-    owner: gomirror
-    name: go-apt-mirror
+    owner: mirrorctl
+    name: mirrorctl
   
   draft: false
   prerelease: auto
@@ -114,7 +114,7 @@ release:
   name_template: "Release {{ .Version }}"
   
   header: |
-    ## go-apt-mirror {{ .Version }}
+    ## mirrorctl {{ .Version }}
     
     This release includes binaries for Linux, macOS, and Windows on multiple architectures.
     
@@ -125,7 +125,7 @@ release:
     ### What's Changed
 
   footer: |
-    **Full Changelog**: https://github.com/gomirror/go-apt-mirror/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/mirrorctl/mirrorctl/compare/{{ .PreviousTag }}...{{ .Tag }}
     
     ### Checksums
     
@@ -134,21 +134,21 @@ release:
 # Homebrew tap (optional - uncomment if you want to publish to Homebrew)
 # brews:
 #   - repository:
-#       owner: gomirror
+#       owner: mirrorctl
 #       name: homebrew-tap
-#     homepage: "https://github.com/gomirror/go-apt-mirror"
+#     homepage: "https://github.com/mirrorctl/mirrorctl"
 #     description: "Tool for mirroring Debian package repositories"
 #     license: "MIT"
 #     test: |
-#       system "#{bin}/go-apt-mirror", "version"
+#       system "#{bin}/mirrorctl", "version"
 
 # Docker images (optional - uncomment if you want to build Docker images)
 # dockers:
 #   - goos: linux
 #     goarch: amd64
 #     image_templates:
-#       - "ghcr.io/gomirror/go-apt-mirror:{{ .Version }}-amd64"
-#       - "ghcr.io/gomirror/go-apt-mirror:latest-amd64"
+#       - "ghcr.io/mirrorctl/mirrorctl:{{ .Version }}-amd64"
+#       - "ghcr.io/mirrorctl/mirrorctl:latest-amd64"
 #     dockerfile: Dockerfile
 #     build_flag_templates:
 #       - "--platform=linux/amd64"

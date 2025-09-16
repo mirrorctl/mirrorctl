@@ -13,8 +13,8 @@ import (
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
 	"github.com/cockroachdb/errors"
-	"github.com/gomirror/go-apt-mirror/internal/apt"
 	"github.com/knqyf263/go-deb-version"
+	"github.com/mirrorctl/mirrorctl/internal/apt"
 	"log/slog"
 )
 
@@ -66,9 +66,9 @@ func (ap *APTParser) extractItems(indices []*apt.FileInfo, indexMap map[string][
 				// already included in Release/InRelease
 				continue
 			}
-			
+
 			// For flat repositories, package file paths need to be prefixed with the suite
-			// Example: suite="xUbuntu_24.04/" + fipath="amd64/rear_2.7-0_amd64.deb" 
+			// Example: suite="xUbuntu_24.04/" + fipath="amd64/rear_2.7-0_amd64.deb"
 			// Result: "xUbuntu_24.04/amd64/rear_2.7-0_amd64.deb"
 			if isFlat(suite) && !apt.IsMeta(fipath) {
 				// Create a new FileInfo with the corrected path for flat repositories

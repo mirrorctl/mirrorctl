@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gomirror/go-apt-mirror/internal/apt"
+	"github.com/mirrorctl/mirrorctl/internal/apt"
 )
 
 // DownloadTestServer provides a mock HTTP server for testing download functionality

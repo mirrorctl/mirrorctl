@@ -1,4 +1,4 @@
-// Package main implements the go-apt-mirror command-line tool for mirroring APT repositories.
+// Package main implements the mirrorctl command-line tool for mirroring APT repositories.
 package main
 
 import (
@@ -13,12 +13,12 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cockroachdb/errors"
-	"github.com/gomirror/go-apt-mirror/internal/mirror"
+	"github.com/mirrorctl/mirrorctl/internal/mirror"
 	"github.com/spf13/cobra"
 )
 
 const (
-	defaultConfigPath = "/etc/apt/mirror.toml"
+	defaultConfigPath = "/etc/mirrorctl/mirror.toml"
 )
 
 var (
@@ -33,11 +33,11 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "go-apt-mirror",
+	Use:   "mirrorctl",
 	Short: "Mirror Debian package repositories",
-	Long: `go-apt-mirror is a tool for creating and maintaining mirrors of Debian package repositories.
+	Long: `mirrorctl is a tool for creating and maintaining mirrors of Debian package repositories.
 
-Find more information at: https://tbd.websitename.xyz`,
+Find more information at: https://github.com/mirrorctl/mirrorctl`,
 }
 
 var syncCmd = &cobra.Command{
@@ -47,25 +47,25 @@ var syncCmd = &cobra.Command{
 
 Usage:
   # Synchronize all repositories in your configuration file
-  go-apt-mirror sync
+  mirrorctl sync
 
   # Synchronize only specific repositories
-  go-apt-mirror sync ubuntu security
+  mirrorctl sync ubuntu security
 
   # Use a custom configuration file
-  go-apt-mirror sync --config /path/to/custom-location.toml
+  mirrorctl sync --config /path/to/custom-location.toml
 
   # Override the log level
-  go-apt-mirror sync --log-level debug
+  mirrorctl sync --log-level debug
 
   # Show detailed error information
-  go-apt-mirror sync --verbose-errors
+  mirrorctl sync --verbose-errors
 
   # Suppress all output except for errors
-  go-apt-mirror sync --quiet
+  mirrorctl sync --quiet
 
   # Dry run - calculate disk usage without downloading
-  go-apt-mirror sync --dry-run
+  mirrorctl sync --dry-run
 
 If no mirror IDs are specified, all repositories in the configuration file will be
 synchronized.`,
@@ -77,7 +77,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print version information",
 	Long:  "Print version information including build details",
 	Run: func(_ *cobra.Command, args []string) {
-		fmt.Printf("go-apt-mirror %s\n", version)
+		fmt.Printf("mirrorctl %s\n", version)
 		fmt.Printf("commit: %s\n", commit)
 		fmt.Printf("built: %s\n", buildDate)
 	},
@@ -99,8 +99,8 @@ This command helps diagnose TLS connection issues by testing supported TLS versi
 negotiated cipher suites, and examining the certificate chain.
 
 Examples:
-  go-apt-mirror tls-check amlfs-noble
-  go-apt-mirror tls-check openenclave`,
+  mirrorctl tls-check amlfs-noble
+  mirrorctl tls-check openenclave`,
 	Args: cobra.ExactArgs(1),
 	Run:  runTLSCheck,
 }
@@ -116,7 +116,7 @@ func init() {
 
 	rootCmd.Flags().BoolP("version", "v", false, "print version information and exit")
 
-	rootCmd.PersistentFlags().BoolP("help", "h", false, "help for go-apt-mirror")
+	rootCmd.PersistentFlags().BoolP("help", "h", false, "help for mirrorctl")
 	rootCmd.PersistentFlags().Bool("no-pgp-check", false, "disable PGP signature verification")
 	rootCmd.PersistentFlags().Bool("verbose-errors", false, "show detailed error information including stack traces")
 	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "suppress all output except for errors")
@@ -205,7 +205,7 @@ func formatUndecodedError(undecoded []toml.Key) string {
 
 func runMirror(cmd *cobra.Command, args []string) {
 	if versionFlag, _ := cmd.Flags().GetBool("version"); versionFlag {
-		fmt.Printf("go-apt-mirror %s\n", version)
+		fmt.Printf("mirrorctl %s\n", version)
 		fmt.Printf("commit: %s\n", commit)
 		fmt.Printf("built: %s\n", buildDate)
 		return

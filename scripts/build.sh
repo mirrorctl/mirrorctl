@@ -1,10 +1,10 @@
 #!/bin/sh -e
 
 usage() {
-    echo "Usage: build.sh [-v] [go-apt-mirror]"
+    echo "Usage: build.sh [-v] [mirrorctl]"
     echo
-    echo "Builds the go-apt-mirror binary for Debian repository mirroring."
-    echo "If no target is specified, defaults to go-apt-mirror."
+    echo "Builds the mirrorctl binary for Debian repository mirroring."
+    echo "If no target is specified, defaults to mirrorctl."
     echo "  -v    verbose output"
     echo
     echo "Note: For release builds with cross-compilation, use GoReleaser:"
@@ -31,11 +31,11 @@ if [ $# -gt 1 ]; then
 fi
 
 if [ $# -eq 1 ]; then
-    if [ "$1" != "go-apt-mirror" ]; then
+    if [ "$1" != "mirrorctl" ]; then
         if [ "$1" = "go-apt-cacher" ]; then
             echo "Error: go-apt-cacher has been removed from this application."
             echo "This application now focuses exclusively on repository mirroring."
-            echo "Use 'go-apt-mirror' or run without arguments."
+            echo "Use 'mirrorctl' or run without arguments."
             echo
             exit 1
         fi
@@ -43,7 +43,7 @@ if [ $# -eq 1 ]; then
     fi
     TARGET="$1"
 else
-    TARGET="go-apt-mirror"
+    TARGET="mirrorctl"
 fi
 XC_OS="${XC_OS:-$(go env GOOS)}"
 XC_ARCH="${XC_ARCH:-$(go env GOARCH)}"

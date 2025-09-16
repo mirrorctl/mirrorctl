@@ -50,7 +50,7 @@ Flags
 
 | Flag        | Short | Default                | Description                        |
 | ----------- | ----- | ---------------------- | ---------------------------------- |
-| `--config`  | `-c`  | `/etc/apt/mirror.toml` | Configuration file path            |
+| `--config`  | `-c`  | `/etc/mirrorctl/mirror.toml` | Configuration file path            |
 | `--help`    | `-h`  |                        | Show help information              |
 | `--version` | `-v`  |                        | Print version information and exit |
 
@@ -58,7 +58,7 @@ Configuration
 -------------
 
 go-apt-mirror reads configurations from a [TOML][] file.  
-The default location is `/etc/apt/mirror.toml`.
+The default location is `/etc/mirrorctl/mirror.toml`.
 
 A sample configuration file is available [here](mirror.toml).
 
