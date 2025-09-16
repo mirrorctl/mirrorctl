@@ -56,8 +56,6 @@ Security-related highlights
   malicious repository metadata from accessing files outside of prescribed boundaries.
 * **Up to date and well-maintained components** - 
 
-Blog: [Introducing go-apt-cacher and go-apt-mirror](http://ymmt2005.hatenablog.com/entry/2016/07/19/Introducing_go-apt-cacher_and_go-apt-mirror)
-
 Build
 -----
 
@@ -67,7 +65,7 @@ Build
 License
 -------
 
-[MIT][]
+[MIT](LICENSE)
 
 Attribution
 -----------
@@ -81,6 +79,9 @@ with specific appreciation for:
   * [@arnarg](https://github.com/arnarg)
   * ... and the entire [aptutil](https://github.com/cybozu-go/aptutil) community for their
     contributions.
+
+You can read the introductory blog post for the original project
+[here](http://ymmt2005.hatenablog.com/entry/2016/07/19/Introducing_go-apt-cacher_and_go-apt-mirror)
 
 I hope that this project's effort is received well in the spirit of building on helpful and
 well-crafted tools.
