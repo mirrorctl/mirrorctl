@@ -17,9 +17,5 @@ tags
 # Archives
 pkg/
 *.tgz
-
-# Ignore go.sum
-/go.sum
 bin
-go-apt-mirror
 TODO.md
