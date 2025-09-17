@@ -91,7 +91,7 @@ func (m *MockAPTRepository) handleRequest(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(content))
+	_, _ = w.Write([]byte(content))
 }
 
 func (m *MockAPTRepository) setupDefaultResponses() {
@@ -131,15 +131,11 @@ func TestMirrorUpdateCycle(t *testing.T) {
 	defer mockRepo.Close()
 
 	// Create temporary directory for mirror
-	tempDir, err := os.MkdirTemp("", "mirror-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test configuration
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte(mockRepo.URL()))
+	err := mockURL.UnmarshalText([]byte(mockRepo.URL()))
 	if err != nil {
 		t.Fatal("Failed to parse mock URL:", err)
 	}
@@ -207,15 +203,11 @@ func TestMirrorNetworkErrors(t *testing.T) {
 	mockRepo.SetFailRequests(true)
 
 	// Create temporary directory for mirror
-	tempDir, err := os.MkdirTemp("", "mirror-error-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test configuration
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte(mockRepo.URL()))
+	err := mockURL.UnmarshalText([]byte(mockRepo.URL()))
 	if err != nil {
 		t.Fatal("Failed to parse mock URL:", err)
 	}
@@ -268,15 +260,11 @@ func TestMirrorConcurrentUpdates(t *testing.T) {
 	mockRepo.SetSlowResponses(true)
 
 	// Create temporary directory for mirror
-	tempDir, err := os.MkdirTemp("", "mirror-concurrent-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test configuration
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte(mockRepo.URL()))
+	err := mockURL.UnmarshalText([]byte(mockRepo.URL()))
 	if err != nil {
 		t.Fatal("Failed to parse mock URL:", err)
 	}
@@ -370,15 +358,11 @@ func TestMirrorContextCancellation(t *testing.T) {
 	mockRepo.SetSlowResponses(true)
 
 	// Create temporary directory for mirror
-	tempDir, err := os.MkdirTemp("", "mirror-cancel-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test configuration
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte(mockRepo.URL()))
+	err := mockURL.UnmarshalText([]byte(mockRepo.URL()))
 	if err != nil {
 		t.Fatal("Failed to parse mock URL:", err)
 	}
@@ -428,13 +412,13 @@ func TestMirrorPartialDownload(t *testing.T) {
 	t.Parallel()
 
 	// Create a mock server that serves partial content
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Simulate connection drop by closing connection early
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 
 		// Write partial content then close
-		io.WriteString(w, "Partial content...")
+		_, _ = io.WriteString(w, "Partial content...")
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
@@ -443,15 +427,11 @@ func TestMirrorPartialDownload(t *testing.T) {
 	defer server.Close()
 
 	// Create temporary directory for mirror
-	tempDir, err := os.MkdirTemp("", "mirror-partial-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test configuration
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte(server.URL))
+	err := mockURL.UnmarshalText([]byte(server.URL))
 	if err != nil {
 		t.Fatal("Failed to parse server URL:", err)
 	}

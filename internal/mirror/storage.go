@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/errors"
+
 	"github.com/mirrorctl/mirrorctl/internal/apt"
 )
 
@@ -91,6 +92,7 @@ func (s *Storage) Load() error {
 	defer func() {
 		if err := f.Close(); err != nil {
 			// Don't use slog here as it may not be initialized yet
+			_ = err // Intentionally ignoring error
 		}
 	}()
 
@@ -123,6 +125,7 @@ func (s *Storage) Save() error {
 	defer func() {
 		if err := f.Close(); err != nil {
 			// Don't use slog here as it may not be initialized yet
+			_ = err // Intentionally ignoring error
 		}
 	}()
 
@@ -132,7 +135,7 @@ func (s *Storage) Save() error {
 		return err
 	}
 
-	f.Sync()
+	_ = f.Sync()
 	err = DirSyncTree(s.dir)
 	if err != nil {
 		return errors.Wrap(err, "DirSyncTree(s.dir)")

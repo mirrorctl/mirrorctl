@@ -19,11 +19,7 @@ func TestRealIntegration_PublishToStaging(t *testing.T) {
 	}
 
 	// Create temporary directory for test
-	tmpDir, err := os.MkdirTemp("", "real-integration-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Load the real config file and modify paths
 	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
@@ -149,11 +145,7 @@ func TestRealIntegration_ForceFlag(t *testing.T) {
 	}
 
 	// Create temporary directory for test
-	tmpDir, err := os.MkdirTemp("", "force-integration-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Load and modify config
 	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
@@ -294,11 +286,7 @@ func TestRealIntegration_MirrorDryRun(t *testing.T) {
 	}
 
 	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "dry-run-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Load config
 	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")

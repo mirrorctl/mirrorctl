@@ -3,12 +3,11 @@ package mirror
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
-
-	"log/slog"
 
 	"github.com/cockroachdb/errors"
 	"golang.org/x/sync/errgroup"

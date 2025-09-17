@@ -212,6 +212,8 @@ func (u *tomlURL) UnmarshalText(text []byte) error {
 }
 
 // MirrorConfig is an auxiliary struct for Config.
+//
+//revive:disable:exported
 type MirrorConfig struct {
 	URL           tomlURL  `toml:"url"`
 	Suites        []string `toml:"suites"`

@@ -107,8 +107,8 @@ SHA512: ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8
 func TestSHA512JSON(t *testing.T) {
 	// Test JSON marshaling/unmarshaling with SHA512
 	fi := &FileInfo{
-		path: "test/file.deb",
-		size: 1024,
+		path:      "test/file.deb",
+		size:      1024,
 		sha512sum: []byte{0xee, 0x26, 0xb0, 0xdd, 0x4a, 0xf7, 0xe7, 0x49},
 	}
 

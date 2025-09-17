@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -95,19 +94,17 @@ func (m *DownloadTestServer) handleRequest(w http.ResponseWriter, r *http.Reques
 
 	w.WriteHeader(response.statusCode)
 	if response.statusCode == http.StatusOK && len(response.content) > 0 {
-		w.Write(response.content)
+		_, _ = w.Write(response.content)
 	}
 }
 
 // setupTestMirror creates a mirror instance for testing
-func setupTestMirror(t *testing.T, serverURL string) (*Mirror, string) {
-	tempDir, err := os.MkdirTemp("", "download-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
+func setupTestMirror(t *testing.T, serverURL string) *Mirror {
+	t.Helper()
+	tempDir := t.TempDir()
 
 	testURL := &tomlURL{}
-	err = testURL.UnmarshalText([]byte(serverURL))
+	err := testURL.UnmarshalText([]byte(serverURL))
 	if err != nil {
 		t.Fatal("Failed to parse test URL:", err)
 	}
@@ -127,11 +124,10 @@ func setupTestMirror(t *testing.T, serverURL string) (*Mirror, string) {
 
 	mirror, err := NewMirror(time.Now(), "test-mirror", config, false, false, false)
 	if err != nil {
-		os.RemoveAll(tempDir)
 		t.Fatal("Failed to create mirror:", err)
 	}
 
-	return mirror, tempDir
+	return mirror
 }
 
 // TestDownloadBasic tests basic file download functionality
@@ -145,8 +141,7 @@ func TestDownloadBasic(t *testing.T) {
 	testContent := []byte("test package content")
 	server.AddResponse("test/file.txt", http.StatusOK, testContent, 0)
 
-	mirror, tempDir := setupTestMirror(t, server.URL())
-	defer os.RemoveAll(tempDir)
+	mirror := setupTestMirror(t, server.URL())
 
 	// Create expected FileInfo
 	fi, err := apt.CopyWithFileInfo(io.Discard, strings.NewReader(string(testContent)), "test/file.txt")
@@ -202,8 +197,7 @@ func TestDownloadRetryLogic(t *testing.T) {
 	testContent := []byte("retry test content")
 	server.AddResponse("test/retry.txt", http.StatusInternalServerError, nil, 0)
 
-	mirror, tempDir := setupTestMirror(t, server.URL())
-	defer os.RemoveAll(tempDir)
+	mirror := setupTestMirror(t, server.URL())
 
 	// Create expected FileInfo
 	fi, err := apt.CopyWithFileInfo(io.Discard, strings.NewReader(string(testContent)), "test/retry.txt")
@@ -255,8 +249,7 @@ func TestDownloadContextCancellation(t *testing.T) {
 	testContent := []byte("slow response")
 	server.AddResponse("test/slow.txt", http.StatusOK, testContent, 500*time.Millisecond)
 
-	mirror, tempDir := setupTestMirror(t, server.URL())
-	defer os.RemoveAll(tempDir)
+	mirror := setupTestMirror(t, server.URL())
 
 	// Create context with short timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -305,8 +298,7 @@ func TestDownloadByHashFallback(t *testing.T) {
 	sha256Path := strings.TrimPrefix(fi.SHA256Path(), "/")
 	server.AddResponse(sha256Path, http.StatusOK, testContent, 0)
 
-	mirror, tempDir := setupTestMirror(t, server.URL())
-	defer os.RemoveAll(tempDir)
+	mirror := setupTestMirror(t, server.URL())
 
 	ctx := context.Background()
 	results := make(chan *dlResult, 1)
@@ -348,8 +340,7 @@ func TestDownloadChecksumValidation(t *testing.T) {
 	wrongContent := []byte("wrong content")
 	server.AddResponse("test/checksum.txt", http.StatusOK, wrongContent, 0)
 
-	mirror, tempDir := setupTestMirror(t, server.URL())
-	defer os.RemoveAll(tempDir)
+	mirror := setupTestMirror(t, server.URL())
 
 	// Create FileInfo with different content (will have different checksum)
 	expectedContent := []byte("expected content")
@@ -388,21 +379,17 @@ func TestDownloadChecksumValidation(t *testing.T) {
 func TestStoreLinkBasic(t *testing.T) {
 	t.Parallel()
 
-	tempDir, err := os.MkdirTemp("", "storelink-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create storage (not directly used but validates storage creation)
-	_, err = NewStorage(tempDir, "test")
+	_, err := NewStorage(tempDir, "test")
 	if err != nil {
 		t.Fatal("Failed to create storage:", err)
 	}
 
 	// Create mirror with storage
 	testURL := &tomlURL{}
-	testURL.UnmarshalText([]byte("http://example.com"))
+	_ = testURL.UnmarshalText([]byte("http://example.com"))
 
 	config := &Config{
 		Dir:      tempDir,
@@ -430,7 +417,7 @@ func TestStoreLinkBasic(t *testing.T) {
 	}
 	defer os.Remove(testFile.Name())
 
-	testFile.Write(testContent)
+	_, _ = testFile.Write(testContent)
 	testFile.Close()
 
 	// Create FileInfo
@@ -523,15 +510,11 @@ func TestExtractItems(t *testing.T) {
 
 	t.Parallel()
 
-	tempDir, err := os.MkdirTemp("", "extract-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test mirror
 	testURL := &tomlURL{}
-	testURL.UnmarshalText([]byte("http://example.com"))
+	_ = testURL.UnmarshalText([]byte("http://example.com"))
 
 	config := &Config{
 		Dir:      tempDir,
@@ -579,7 +562,7 @@ SHA256: a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3
 	}
 	defer os.Remove(packagesFile.Name())
 
-	packagesFile.WriteString(packagesContent)
+	_, _ = packagesFile.WriteString(packagesContent)
 	packagesFile.Close()
 
 	// Create FileInfo for the packages file
@@ -626,14 +609,9 @@ SHA256: a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3
 func TestHandleResult(t *testing.T) {
 	t.Parallel()
 
-	tempDir, err := os.MkdirTemp("", "handle-result-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
-	mirror, _ := setupTestMirror(t, "http://example.com")
-	defer os.RemoveAll(filepath.Dir(mirror.storage.Dir()))
+	mirror := setupTestMirror(t, "http://example.com")
 
 	// Test 1: Successful result
 	testContent := []byte("successful content")
@@ -643,7 +621,7 @@ func TestHandleResult(t *testing.T) {
 	}
 	defer os.Remove(tempFile.Name())
 
-	tempFile.Write(testContent)
+	_, _ = tempFile.Write(testContent)
 	tempFile.Close()
 
 	fi, err := apt.CopyWithFileInfo(io.Discard, strings.NewReader(string(testContent)), "test/success.txt")
@@ -743,8 +721,7 @@ func TestDownloadFilesIntegration(t *testing.T) {
 		fileInfos = append(fileInfos, fi)
 	}
 
-	mirror, tempDir := setupTestMirror(t, server.URL())
-	defer os.RemoveAll(tempDir)
+	mirror := setupTestMirror(t, server.URL())
 
 	// Test downloadFiles
 	ctx := context.Background()
@@ -774,15 +751,11 @@ func TestRealRepositoryDownloadPipeline(t *testing.T) {
 	// Use Microsoft's small Slurm repository
 	repoURL := "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
 
-	tempDir, err := os.MkdirTemp("", "real-download-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test configuration
 	testURL := &tomlURL{}
-	err = testURL.UnmarshalText([]byte(repoURL))
+	err := testURL.UnmarshalText([]byte(repoURL))
 	if err != nil {
 		t.Fatal("Failed to parse repository URL:", err)
 	}
@@ -859,8 +832,7 @@ func TestDownloadPipelineErrorScenarios(t *testing.T) {
 	server := NewDownloadTestServer()
 	defer server.Close()
 
-	mirror, tempDir := setupTestMirror(t, server.URL())
-	defer os.RemoveAll(tempDir)
+	mirror := setupTestMirror(t, server.URL())
 
 	ctx := context.Background()
 

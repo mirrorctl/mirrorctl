@@ -22,7 +22,7 @@ func makeFileInfo(path string, data []byte) (*apt.FileInfo, error) {
 func testStorageBadConstruction(t *testing.T) {
 	t.Parallel()
 
-	f, err := os.CreateTemp("", "gotest")
+	f, err := os.CreateTemp(t.TempDir(), "gotest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,11 +48,7 @@ func testStorageBadConstruction(t *testing.T) {
 func testStorageLookup(t *testing.T) {
 	t.Parallel()
 
-	d, err := os.MkdirTemp("", "gotest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(d)
+	d := t.TempDir()
 
 	s, err := NewStorage(d, "pre")
 	if err != nil {
@@ -109,7 +105,7 @@ func testStorageLookup(t *testing.T) {
 		t.Error(`fi3 == nil`)
 	}
 
-	s.Save()
+	_ = s.Save()
 
 	s2, err := NewStorage(d, "ubuntu")
 	if err != nil {
@@ -161,11 +157,7 @@ func testStorageLookup(t *testing.T) {
 func testStorageStore(t *testing.T) {
 	t.Parallel()
 
-	d, err := os.MkdirTemp("", "gotest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(d)
+	d := t.TempDir()
 
 	s, err := NewStorage(d, "pre")
 	if err != nil {

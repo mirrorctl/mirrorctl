@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -13,15 +14,11 @@ func TestNewMirrorCreation(t *testing.T) {
 	t.Parallel()
 
 	// Create temporary directory
-	tempDir, err := os.MkdirTemp("", "mirror-creation-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Test 1: Valid mirror creation
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte("http://example.com/ubuntu/"))
+	err := mockURL.UnmarshalText([]byte("http://example.com/ubuntu/"))
 	if err != nil {
 		t.Fatal("Failed to parse URL:", err)
 	}
@@ -47,9 +44,7 @@ func TestNewMirrorCreation(t *testing.T) {
 
 	if mirror == nil {
 		t.Error("Mirror should not be nil")
-	}
-
-	if mirror.id != "test-mirror" {
+	} else if mirror.id != "test-mirror" {
 		t.Errorf("Expected mirror ID 'test-mirror', got '%s'", mirror.id)
 	}
 
@@ -72,7 +67,7 @@ func TestNewMirrorCreation(t *testing.T) {
 
 	// Check that the storage directory follows the expected pattern
 	expectedPrefix := filepath.Join(tempDir, ".test-mirror.")
-	if !filepath.HasPrefix(storageDir, expectedPrefix) {
+	if !strings.HasPrefix(storageDir, expectedPrefix) {
 		t.Errorf("Storage directory should start with %s, got %s", expectedPrefix, storageDir)
 	}
 }
@@ -82,14 +77,10 @@ func TestMirrorConfigValidation(t *testing.T) {
 	t.Parallel()
 
 	// Create temporary directory
-	tempDir, err := os.MkdirTemp("", "mirror-config-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte("http://example.com/ubuntu/"))
+	err := mockURL.UnmarshalText([]byte("http://example.com/ubuntu/"))
 	if err != nil {
 		t.Fatal("Failed to parse URL:", err)
 	}
@@ -139,14 +130,10 @@ func TestMirrorStorageOperations(t *testing.T) {
 	t.Parallel()
 
 	// Create temporary directory
-	tempDir, err := os.MkdirTemp("", "mirror-storage-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte("http://example.com/ubuntu/"))
+	err := mockURL.UnmarshalText([]byte("http://example.com/ubuntu/"))
 	if err != nil {
 		t.Fatal("Failed to parse URL:", err)
 	}
@@ -193,14 +180,10 @@ func TestMirrorContextHandling(t *testing.T) {
 	t.Parallel()
 
 	// Create temporary directory
-	tempDir, err := os.MkdirTemp("", "mirror-context-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	mockURL := &tomlURL{}
-	err = mockURL.UnmarshalText([]byte("http://nonexistent.example.com/"))
+	err := mockURL.UnmarshalText([]byte("http://nonexistent.example.com/"))
 	if err != nil {
 		t.Fatal("Failed to parse URL:", err)
 	}
@@ -224,18 +207,18 @@ func TestMirrorContextHandling(t *testing.T) {
 		t.Fatal("Failed to create mirror:", err)
 	}
 
-	// Test with cancelled context
+	// Test with canceled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
 	err = mirror.Update(ctx)
 	if err == nil {
-		t.Error("Update should fail with cancelled context")
+		t.Error("Update should fail with canceled context")
 	}
 
 	// Check if error is context-related
 	if err != context.Canceled && err.Error() != "context canceled" {
-		t.Logf("Update failed appropriately with cancelled context: %v", err)
+		t.Logf("Update failed appropriately with canceled context: %v", err)
 	}
 }
 

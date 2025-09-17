@@ -20,15 +20,11 @@ func TestMirrorWithRealRepository(t *testing.T) {
 	repoURL := "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
 
 	// Create temporary directory for mirror
-	tempDir, err := os.MkdirTemp("", "real-mirror-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test configuration for the small Microsoft Slurm repo
 	testURL := &tomlURL{}
-	err = testURL.UnmarshalText([]byte(repoURL))
+	err := testURL.UnmarshalText([]byte(repoURL))
 	if err != nil {
 		t.Fatal("Failed to parse repository URL:", err)
 	}
@@ -89,7 +85,7 @@ func TestMirrorWithRealRepository(t *testing.T) {
 
 	// Check if Release file exists anywhere in storage
 	var releaseFound bool
-	filepath.WalkDir(storageDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(storageDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -127,14 +123,10 @@ func TestMirrorRealRepoResume(t *testing.T) {
 	repoURL := "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
 
 	// Create temporary directory for mirror
-	tempDir, err := os.MkdirTemp("", "resume-mirror-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	testURL := &tomlURL{}
-	err = testURL.UnmarshalText([]byte(repoURL))
+	err := testURL.UnmarshalText([]byte(repoURL))
 	if err != nil {
 		t.Fatal("Failed to parse repository URL:", err)
 	}
@@ -202,14 +194,10 @@ func TestMirrorNetworkResilience(t *testing.T) {
 	badRepoURL := "https://nonexistent.packages.microsoft.com/repos/slurm-ubuntu-noble/"
 
 	// Create temporary directory for mirror
-	tempDir, err := os.MkdirTemp("", "network-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	testURL := &tomlURL{}
-	err = testURL.UnmarshalText([]byte(badRepoURL))
+	err := testURL.UnmarshalText([]byte(badRepoURL))
 	if err != nil {
 		t.Fatal("Failed to parse bad repository URL:", err)
 	}

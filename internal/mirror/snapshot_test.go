@@ -11,11 +11,7 @@ import (
 
 func TestSnapshotManager_Basic(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create config
 	config := &SnapshotConfig{
@@ -62,11 +58,7 @@ func TestSnapshotManager_Basic(t *testing.T) {
 
 func TestSnapshotManager_CreateAndList(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create test mirror data structure (separate from live path)
 	livePath := filepath.Join(tmpDir, "live")
@@ -89,11 +81,11 @@ func TestSnapshotManager_CreateAndList(t *testing.T) {
 	sm := NewSnapshotManager(config, livePath)
 
 	// Temporarily create live symlink for CreateSnapshot to work
-	os.MkdirAll(livePath, 0755)
-	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+	_ = os.MkdirAll(livePath, 0755)
+	_ = os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
 
 	// Create snapshot
-	_, err = sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
+	_, err := sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
 	if err != nil {
 		t.Fatalf("failed to create snapshot: %v", err)
 	}
@@ -152,11 +144,7 @@ func TestSnapshotManager_CreateAndList(t *testing.T) {
 
 func TestSnapshotManager_PublishAndDelete(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create test mirror data structure (separate from live path)
 	livePath := filepath.Join(tmpDir, "live")
@@ -178,10 +166,10 @@ func TestSnapshotManager_PublishAndDelete(t *testing.T) {
 	sm := NewSnapshotManager(config, livePath)
 
 	// Create snapshots from mirror data (temporarily create symlink for CreateSnapshot)
-	os.MkdirAll(filepath.Join(livePath), 0755)
-	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+	_ = os.MkdirAll(filepath.Join(livePath), 0755)
+	_ = os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
 
-	_, err = sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
+	_, err := sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
 	if err != nil {
 		t.Fatalf("failed to create snapshot-1: %v", err)
 	}
@@ -261,11 +249,7 @@ func TestSnapshotManager_PublishAndDelete(t *testing.T) {
 
 func TestSnapshotManager_PerMirrorNaming(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create test mirror data structure
 	livePath := filepath.Join(tmpDir, "live")
@@ -304,8 +288,8 @@ func TestSnapshotManager_PerMirrorNaming(t *testing.T) {
 	}
 
 	// Test creating snapshot with per-mirror naming
-	os.MkdirAll(livePath, 0755)
-	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+	_ = os.MkdirAll(livePath, 0755)
+	_ = os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
 
 	// Create snapshot without specifying name - should use mirror-specific format
 	actualName, err := sm.CreateSnapshot("test-mirror", "", false, mirrorConfig)
@@ -372,11 +356,7 @@ func TestSnapshotManager_ParseDuration(t *testing.T) {
 
 func TestSnapshotManager_Prune(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create test mirror data structure (separate from live path)
 	livePath := filepath.Join(tmpDir, "live")
@@ -402,13 +382,13 @@ func TestSnapshotManager_Prune(t *testing.T) {
 	sm := NewSnapshotManager(config, livePath)
 
 	// Temporarily create live symlink for CreateSnapshot to work
-	os.MkdirAll(livePath, 0755)
-	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+	_ = os.MkdirAll(livePath, 0755)
+	_ = os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
 
 	// Create multiple snapshots
 	for i := 1; i <= 5; i++ {
 		snapshotName := fmt.Sprintf("snapshot-%d", i)
-		_, err = sm.CreateSnapshot("test-mirror", snapshotName, false, nil)
+		_, err := sm.CreateSnapshot("test-mirror", snapshotName, false, nil)
 		if err != nil {
 			t.Fatalf("failed to create %s: %v", snapshotName, err)
 		}
@@ -416,7 +396,7 @@ func TestSnapshotManager_Prune(t *testing.T) {
 	}
 
 	// Publish one snapshot
-	err = sm.PublishSnapshot("test-mirror", "snapshot-3")
+	err := sm.PublishSnapshot("test-mirror", "snapshot-3")
 	if err != nil {
 		t.Fatalf("failed to publish snapshot: %v", err)
 	}
@@ -488,11 +468,7 @@ func TestSnapshotManager_Prune(t *testing.T) {
 
 func TestSnapshotManager_StagingWorkflow(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create test mirror data structure
 	livePath := filepath.Join(tmpDir, "live")
@@ -514,11 +490,11 @@ func TestSnapshotManager_StagingWorkflow(t *testing.T) {
 	sm := NewSnapshotManager(config, livePath)
 
 	// Create live symlink for CreateSnapshot to work
-	os.MkdirAll(livePath, 0755)
-	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+	_ = os.MkdirAll(livePath, 0755)
+	_ = os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
 
 	// Create snapshot
-	_, err = sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
+	_, err := sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
 	if err != nil {
 		t.Fatalf("failed to create snapshot: %v", err)
 	}
@@ -610,11 +586,7 @@ func TestSnapshotManager_StagingWorkflow(t *testing.T) {
 
 func TestSnapshotManager_StagingProtection(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create test mirror data structure
 	livePath := filepath.Join(tmpDir, "live")
@@ -640,11 +612,11 @@ func TestSnapshotManager_StagingProtection(t *testing.T) {
 	sm := NewSnapshotManager(config, livePath)
 
 	// Create live symlink for CreateSnapshot to work
-	os.MkdirAll(livePath, 0755)
-	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+	_ = os.MkdirAll(livePath, 0755)
+	_ = os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
 
 	// Create multiple snapshots
-	_, err = sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
+	_, err := sm.CreateSnapshot("test-mirror", "snapshot-1", false, nil)
 	if err != nil {
 		t.Fatalf("failed to create snapshot-1: %v", err)
 	}
@@ -703,11 +675,7 @@ func TestSnapshotManager_StagingProtection(t *testing.T) {
 
 func TestSnapshotManager_PromoteErrors(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create snapshot manager
 	config := &SnapshotConfig{
@@ -716,7 +684,7 @@ func TestSnapshotManager_PromoteErrors(t *testing.T) {
 	sm := NewSnapshotManager(config, filepath.Join(tmpDir, "live"))
 
 	// Try to promote when nothing is staged (should fail)
-	_, err = sm.PromoteSnapshot("test-mirror")
+	_, err := sm.PromoteSnapshot("test-mirror")
 	if err == nil {
 		t.Error("should fail when nothing is staged")
 	}
@@ -784,11 +752,7 @@ func TestSnapshotInfo_Status(t *testing.T) {
 
 func TestSnapshotManager_DeleteWithForce(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "snapshot-test-force-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create test mirror data structure
 	livePath := filepath.Join(tmpDir, "live")
@@ -810,10 +774,10 @@ func TestSnapshotManager_DeleteWithForce(t *testing.T) {
 	sm := NewSnapshotManager(config, livePath)
 
 	// Create live symlink and snapshots
-	os.MkdirAll(livePath, 0755)
-	os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
+	_ = os.MkdirAll(livePath, 0755)
+	_ = os.Symlink(mirrorDataPath, filepath.Join(livePath, "test-mirror"))
 
-	_, err = sm.CreateSnapshot("test-mirror", "snapshot-published", false, nil)
+	_, err := sm.CreateSnapshot("test-mirror", "snapshot-published", false, nil)
 	if err != nil {
 		t.Fatalf("failed to create published snapshot: %v", err)
 	}

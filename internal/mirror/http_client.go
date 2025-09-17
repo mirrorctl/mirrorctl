@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/mirrorctl/mirrorctl/internal/apt"
 	"golang.org/x/sync/errgroup"
-	"log/slog"
+
+	"github.com/mirrorctl/mirrorctl/internal/apt"
 )
 
 // HTTPClient handles HTTP downloading with retries and by-hash fallback.
@@ -104,7 +105,7 @@ func (h *HTTPClient) download(ctx context.Context, mirrorConfig *MirrorConfig,
 		header.Add("User-Agent", "Debian APT-HTTP/1.3 (aptutil)")
 
 		req := &http.Request{
-			Method:     "GET",
+			Method:     http.MethodGet,
 			URL:        mirrorConfig.Resolve(targets[0]),
 			Proto:      "HTTP/1.1",
 			ProtoMajor: 1,

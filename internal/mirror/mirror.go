@@ -3,6 +3,7 @@ package mirror
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -11,9 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"log/slog"
-
 	"github.com/cockroachdb/errors"
+
 	"github.com/mirrorctl/mirrorctl/internal/apt"
 )
 

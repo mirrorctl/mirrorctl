@@ -16,25 +16,25 @@ func TestValidateRepositoryPath(t *testing.T) {
 		{"valid nested path", "pool/main/a/apache2/apache2_2.4.41-4ubuntu3_amd64.deb", false},
 		{"valid path with dots in filename", "main/i18n/Translation-en.bz2", false},
 		{"valid by-hash path", "main/binary-amd64/by-hash/SHA256/abcdef123456", false},
-		
+
 		// Path traversal attempts
 		{"parent directory reference", "../etc/passwd", true},
 		{"nested parent directory", "main/../../../etc/passwd", true},
 		{"parent in middle", "main/../binary-amd64/Packages", true},
 		{"multiple parent references", "../../usr/bin/malicious", true},
 		{"parent with slash", "../binary-amd64/Packages", true},
-		
+
 		// Absolute path attempts
 		{"absolute unix path", "/etc/passwd", true},
 		{"absolute path", "/usr/bin/malicious", true},
 		{"windows absolute path", "C:\\Windows\\System32", true},
 		{"root reference", "/", true},
-		
+
 		// Edge cases
 		{"empty path", "", false}, // Empty path should be allowed (some checksums might be empty)
 		{"just filename", "Packages", false},
-		{"single dot", ".", false}, // Current directory reference should be allowed after cleaning
-		{"double slash", "main//binary-amd64", false}, // Should be cleaned and allowed
+		{"single dot", ".", false},                      // Current directory reference should be allowed after cleaning
+		{"double slash", "main//binary-amd64", false},   // Should be cleaned and allowed
 		{"trailing slash", "main/binary-amd64/", false}, // Should be cleaned and allowed
 	}
 
@@ -50,10 +50,10 @@ func TestValidateRepositoryPath(t *testing.T) {
 
 func TestParseChecksumSecurity(t *testing.T) {
 	tests := []struct {
-		name     string
-		line     string
-		wantErr  bool
-		errMsg   string
+		name    string
+		line    string
+		wantErr bool
+		errMsg  string
 	}{
 		{
 			name:    "valid checksum line",

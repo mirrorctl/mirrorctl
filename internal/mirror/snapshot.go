@@ -23,6 +23,8 @@ type SnapshotPruneConfig struct {
 }
 
 // MirrorSnapshotConfig defines per-mirror snapshot overrides
+//
+//revive:disable:exported
 type MirrorSnapshotConfig struct {
 	DefaultNameFormat string               `toml:"default_name_format,omitempty"`
 	Prune             *SnapshotPruneConfig `toml:"prune,omitempty"`
@@ -217,7 +219,7 @@ func (sm *SnapshotManager) calculateSnapshotSize(path string) (int64, int) {
 	var totalSize int64
 	var fileCount int
 
-	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}
@@ -517,7 +519,7 @@ func (sm *SnapshotManager) ParseDuration(duration string) (time.Duration, error)
 }
 
 // GetPruneConfig returns the effective prune configuration for a mirror
-func (sm *SnapshotManager) GetPruneConfig(mirror string, mirrorConfig *MirrorSnapshotConfig) SnapshotPruneConfig {
+func (sm *SnapshotManager) GetPruneConfig(_ string, mirrorConfig *MirrorSnapshotConfig) SnapshotPruneConfig {
 	config := sm.config.Prune
 
 	// Override with mirror-specific settings if available

@@ -170,7 +170,7 @@ func TestTLSConfigBuild(t *testing.T) {
 				return
 			}
 			if !tt.wantErr && tt.validate != nil {
-				tt.validate(cfg)
+				_ = tt.validate(cfg)
 			}
 		})
 	}
@@ -178,11 +178,7 @@ func TestTLSConfigBuild(t *testing.T) {
 
 func TestTLSConfigWithCertificates(t *testing.T) {
 	// Create temporary directory for test certificates
-	tempDir, err := os.MkdirTemp("", "tls_test")
-	if err != nil {
-		t.Fatal("Failed to create temp dir:", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create a dummy CA certificate file for testing
 	caCertPath := filepath.Join(tempDir, "ca.pem")
@@ -218,7 +214,7 @@ Z6tGn6D/Qqc6f1zLXbBwHSs09dR2CQzreExZBfMzQsNhFRAbd03OIozUhfJFfbdT
 ZP6MvPJwNQzcmRk13NfIRmPVNnGuV/u3gm3c
 -----END CERTIFICATE-----`
 
-	err = os.WriteFile(caCertPath, []byte(caCertPEM), 0644)
+	err := os.WriteFile(caCertPath, []byte(caCertPEM), 0644)
 	if err != nil {
 		t.Fatal("Failed to write CA cert:", err)
 	}

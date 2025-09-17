@@ -8,11 +8,7 @@ import (
 
 func TestHandleSnapshotting_PublishToStaging(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "staging-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Setup directory structure
 	mirrorDir := filepath.Join(tmpDir, "mirrors")
@@ -30,10 +26,10 @@ func TestHandleSnapshotting_PublishToStaging(t *testing.T) {
 
 	// Create test URLs
 	testURL := &tomlURL{}
-	testURL.UnmarshalText([]byte("https://example.com/test"))
+	_ = testURL.UnmarshalText([]byte("https://example.com/test"))
 
 	noStagingURL := &tomlURL{}
-	noStagingURL.UnmarshalText([]byte("https://example.com/no-staging"))
+	_ = noStagingURL.UnmarshalText([]byte("https://example.com/no-staging"))
 
 	// Create test config
 	config := &Config{
@@ -67,7 +63,7 @@ func TestHandleSnapshotting_PublishToStaging(t *testing.T) {
 	}
 
 	// Create live symlink to simulate successful sync
-	os.Symlink(testMirrorPath, filepath.Join(mirrorDir, "test-mirror"))
+	_ = os.Symlink(testMirrorPath, filepath.Join(mirrorDir, "test-mirror"))
 
 	// Create another test mirror for no-staging test
 	testMirrorPath2 := filepath.Join(mirrorDir, "no-staging-mirror")
@@ -78,10 +74,10 @@ func TestHandleSnapshotting_PublishToStaging(t *testing.T) {
 	if err := os.WriteFile(testFile2, []byte("test content 2"), 0644); err != nil {
 		t.Fatalf("failed to create test file 2: %v", err)
 	}
-	os.Symlink(testMirrorPath2, filepath.Join(mirrorDir, "no-staging-mirror"))
+	_ = os.Symlink(testMirrorPath2, filepath.Join(mirrorDir, "no-staging-mirror"))
 
 	// Test handleSnapshotting with force=false
-	err = handleSnapshotting(config, mirrors, false)
+	err := handleSnapshotting(config, mirrors, false)
 	if err != nil {
 		t.Errorf("handleSnapshotting should succeed: %v", err)
 	}
@@ -125,11 +121,7 @@ func TestHandleSnapshotting_PublishToStaging(t *testing.T) {
 
 func TestHandleSnapshotting_WithForce(t *testing.T) {
 	// Create temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "staging-force-test-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Setup directory structure
 	mirrorDir := filepath.Join(tmpDir, "mirrors")
@@ -147,7 +139,7 @@ func TestHandleSnapshotting_WithForce(t *testing.T) {
 
 	// Create test URL
 	testURL := &tomlURL{}
-	testURL.UnmarshalText([]byte("https://example.com/test"))
+	_ = testURL.UnmarshalText([]byte("https://example.com/test"))
 
 	// Create test config with specific date format to ensure conflicts
 	config := &Config{
@@ -175,10 +167,10 @@ func TestHandleSnapshotting_WithForce(t *testing.T) {
 	}
 
 	// Create live symlink
-	os.Symlink(testMirrorPath, filepath.Join(mirrorDir, "test-mirror"))
+	_ = os.Symlink(testMirrorPath, filepath.Join(mirrorDir, "test-mirror"))
 
 	// First call should succeed
-	err = handleSnapshotting(config, mirrors, false)
+	err := handleSnapshotting(config, mirrors, false)
 	if err != nil {
 		t.Errorf("first handleSnapshotting should succeed: %v", err)
 	}
@@ -214,7 +206,7 @@ func TestHandleSnapshotting_WithForce(t *testing.T) {
 func TestHandleSnapshotting_NoSnapshotConfig(t *testing.T) {
 	// Create test URL
 	testURL := &tomlURL{}
-	testURL.UnmarshalText([]byte("https://example.com/test"))
+	_ = testURL.UnmarshalText([]byte("https://example.com/test"))
 
 	// Test that the real Run function guards against nil snapshot config
 	// This test validates that in the actual workflow, handleSnapshotting

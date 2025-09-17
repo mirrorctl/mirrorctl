@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,8 +15,8 @@ import (
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
 	"github.com/cockroachdb/errors"
 	"github.com/knqyf263/go-deb-version"
+
 	"github.com/mirrorctl/mirrorctl/internal/apt"
-	"log/slog"
 )
 
 // APTParser handles parsing APT repository metadata
@@ -108,7 +109,7 @@ func addFileInfoToList(fi *apt.FileInfo, m map[string][]*apt.FileInfo, byhash bo
 }
 
 // handleReleaseResults processes download results from Release/InRelease files
-func (ap *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool, m *Mirror) ([]*apt.FileInfo, map[string]*dlResult, error) {
+func (ap *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool, _ *Mirror) ([]*apt.FileInfo, map[string]*dlResult, error) {
 	downloaded := make(map[string]*dlResult)
 	var allFileInfos []*apt.FileInfo
 	var processedOne bool
@@ -219,18 +220,16 @@ func (ap *APTParser) handleReleaseResults(results <-chan *dlResult, byhash *bool
 		} else if len(notFoundErrors) > 0 {
 			slog.Error("no release files found - all variants returned 404", "repo", ap.mirrorID, "tried", len(notFoundErrors))
 			return nil, nil, errors.Wrap(errors.Join(notFoundErrors...), "no Release/InRelease files available")
-		} else {
-			if resultsReceived == 0 {
-				slog.Error("no download results received - channel closed without data", "repo", ap.mirrorID)
-				return nil, nil, errors.New("no download results received - possible network or timeout issue")
-			} else {
-				slog.Error("no release files downloaded and no errors reported", "repo", ap.mirrorID,
-					"results_received", resultsReceived,
-					"total_download_errors", len(downloadErrors),
-					"download_errors", downloadErrors)
-				return nil, nil, errors.New("failed to download Release/InRelease")
-			}
 		}
+		if resultsReceived == 0 {
+			slog.Error("no download results received - channel closed without data", "repo", ap.mirrorID)
+			return nil, nil, errors.New("no download results received - possible network or timeout issue")
+		}
+		slog.Error("no release files downloaded and no errors reported", "repo", ap.mirrorID,
+			"results_received", resultsReceived,
+			"total_download_errors", len(downloadErrors),
+			"download_errors", downloadErrors)
+		return nil, nil, errors.New("failed to download Release/InRelease")
 	}
 
 	if len(actualErrors) > 0 {
@@ -358,12 +357,6 @@ func (ap *APTParser) downloadIndices(ctx context.Context, httpClient *HTTPClient
 	return httpClient.downloadIndicesFiles(ctx, ap.config, indices, true, byhash)
 }
 
-// isReleaseFile determines if a file path represents a Release or InRelease file
-func (ap *APTParser) isReleaseFile(path string) bool {
-	base := filepath.Base(path)
-	return strings.HasPrefix(base, "Release") || strings.HasPrefix(base, "InRelease")
-}
-
 // isIndexFile determines if a file path represents an index file (Packages, Sources, Contents)
 func (ap *APTParser) isIndexFile(path string) bool {
 	base := filepath.Base(path)
@@ -380,30 +373,9 @@ func (ap *APTParser) isIndexFile(path string) bool {
 	return base == "Packages" || base == "Sources" || base == "Contents" || base == "Index"
 }
 
-// isPackageFile determines if a file path represents an actual package file (not metadata)
-func (ap *APTParser) isPackageFile(path string) bool {
-	// Skip by-hash paths
-	if strings.Contains(path, "/by-hash/") {
-		return false
-	}
-
-	// Skip metadata files
-	if ap.isReleaseFile(path) || ap.isIndexFile(path) {
-		return false
-	}
-
-	base := filepath.Base(path)
-	// Include actual package and source files
-	return strings.HasSuffix(base, ".deb") || strings.HasSuffix(base, ".udeb") || strings.HasSuffix(base, ".ddeb") ||
-		strings.HasSuffix(base, ".tar.gz") || strings.HasSuffix(base, ".tar.xz") || strings.HasSuffix(base, ".tar.bz2") ||
-		strings.HasSuffix(base, ".dsc") || strings.HasSuffix(base, ".orig.tar.gz") || strings.HasSuffix(base, ".orig.tar.xz") ||
-		strings.HasSuffix(base, ".debian.tar.gz") || strings.HasSuffix(base, ".debian.tar.xz") ||
-		strings.HasSuffix(base, ".diff.gz") || strings.HasSuffix(base, ".patch.gz")
-}
-
 // downloadItems downloads package files listed in the indices
 func (ap *APTParser) downloadItems(ctx context.Context, httpClient *HTTPClient,
-	indices []*apt.FileInfo, byhash, quiet bool, m *Mirror, suite string) ([]*apt.FileInfo, error) {
+	indices []*apt.FileInfo, byhash, _ bool, m *Mirror, suite string) ([]*apt.FileInfo, error) {
 
 	indexMap := make(map[string][]*apt.FileInfo)
 	itemMap := make(map[string]*apt.FileInfo)

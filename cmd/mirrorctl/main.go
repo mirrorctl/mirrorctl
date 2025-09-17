@@ -13,8 +13,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cockroachdb/errors"
-	"github.com/mirrorctl/mirrorctl/internal/mirror"
 	"github.com/spf13/cobra"
+
+	"github.com/mirrorctl/mirrorctl/internal/mirror"
 )
 
 const (
@@ -76,7 +77,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
 	Long:  "Print version information including build details",
-	Run: func(_ *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		fmt.Printf("mirrorctl %s\n", version)
 		fmt.Printf("commit: %s\n", commit)
 		fmt.Printf("built: %s\n", buildDate)
@@ -388,7 +389,7 @@ func runMirror(cmd *cobra.Command, args []string) {
 	}
 }
 
-func runValidate(cmd *cobra.Command, args []string) {
+func runValidate(cmd *cobra.Command, _ []string) {
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 
 	config := mirror.NewConfig()
@@ -440,7 +441,7 @@ func runValidate(cmd *cobra.Command, args []string) {
 	slog.Info("the toml configuration file passes validation checks")
 }
 
-func runTLSCheck(cmd *cobra.Command, args []string) {
+func runTLSCheck(_ *cobra.Command, args []string) {
 	mirrorID := args[0]
 
 	// Load configuration file
@@ -592,7 +593,7 @@ func tlsVersionString(version uint16) string {
 }
 
 // loadConfigForSnapshot is a helper function to load configuration for snapshot commands
-func loadConfigForSnapshot(verboseErrors bool) (*mirror.Config, error) {
+func loadConfigForSnapshot(_ bool) (*mirror.Config, error) {
 	config := mirror.NewConfig()
 	meta, err := toml.DecodeFile(configPath, config)
 	if err != nil {
