@@ -1,0 +1,12 @@
+# Minimal mirrorctl Configuration Example
+# This shows the bare minimum required configuration
+
+# Base directory for mirrored repositories (REQUIRED)
+dir = "/var/www/apt"
+
+# Mirror Configuration (at least one mirror required)
+[mirrors.ubuntu-noble]
+url = "https://archive.ubuntu.com/ubuntu/"
+suites = ["noble"]
+sections = ["main"]
+architectures = ["amd64"]

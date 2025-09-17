@@ -1,7 +1,7 @@
 ####################
 ## Global Options ##
 
-dir = "/home/jcampbell/Public/mirror-dir/"
+dir = "/home/$USER/mirrorctl/examples/mirror-data/"
 max_conns = 10
 
 
@@ -10,7 +10,7 @@ max_conns = 10
 
 [mirrors.amlfs-noble]
 url = "https://packages.microsoft.com/repos/amlfs-noble/"
-pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+pgp_key_path = "/home/$USER/mirrorctl/examples/keys/microsoft.asc"
 architectures = ["amd64"]
 mirror_source = false
 publish_to_staging = true
@@ -30,7 +30,7 @@ suites = ["noble"]
 
 [mirrors.openenclave]
 url = "https://packages.microsoft.com/repos/openenclave/"
-pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+pgp_key_path = "/home/$USER/examples/mirrorctl/examples/keys/microsoft.asc"
 architectures = ["amd64", "arm64"]
 sections = ["main"]
 suites = ["bionic"]
@@ -55,7 +55,7 @@ suites = ["xUbuntu_22.04/", "xUbuntu_24.04/"]
 
 [mirrors.slurm-ubuntu-noble]
 url = "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
-pgp_key_path = "/home/jcampbell/Public/keys/microsoft.asc"
+pgp_key_path = "/home/$USER/examples/mirrorctl/examples/keys/microsoft.asc"
 architectures = ["amd64"]
 sections = ["main"]
 suites = ["stable"]
@@ -80,7 +80,7 @@ format = "json"  # plain, text, json
 ## SNAPSHOT CONFIGURATION (OPTIONAL) ##
 
 [snapshot]
-path = "/home/jcampbell/Public/mirror-snapshots/"
+path = "/home/$USER/examples/mirrorctl/examples/snapshots/"
 default_name_format = "2006-01-02T15-04-05Z" # Go time format
 
 [snapshot.prune]

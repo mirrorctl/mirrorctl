@@ -22,8 +22,8 @@ func TestConfig(t *testing.T) {
 		t.Errorf("undecoded keys: %#v", md.Undecoded())
 	}
 
-	if c.Dir != "/home/jcampbell/Public/mirror-dir/" {
-		t.Errorf(`c.Dir = %q, want "/home/jcampbell/Public/mirror-dir/"`, c.Dir)
+	if c.Dir != "examples/mirror-data/" {
+		t.Errorf(`c.Dir = %q, want "examples/mirror-data/"`, c.Dir)
 	}
 	if c.MaxConns != 10 {
 		t.Errorf(`c.MaxConns = %d, want 10`, c.MaxConns)

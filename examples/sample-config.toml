@@ -1,0 +1,186 @@
+# mirrorctl Configuration File
+# Complete example showing all available configuration options
+
+# Global Settings
+# ===============
+
+# Base directory where mirrored repositories will be stored
+# REQUIRED: Must be an absolute path
+dir = "/var/www/apt"
+
+# Maximum number of concurrent connections per mirror
+# Optional: Default is 10
+max_conns = 10
+
+# Logging Configuration
+# ====================
+[log]
+# Log level: debug, info, warn, error
+# Optional: Default is "info"
+level = "info"
+
+# Log format: text, plain, json
+# Optional: Default is "text"
+format = "text"
+
+# TLS/SSL Configuration
+# ====================
+[tls]
+# Minimum TLS version: "1.2" or "1.3"
+# Optional: Default is "1.2"
+min_version = "1.2"
+
+# Maximum TLS version: "1.2" or "1.3"
+# Optional: Unset allows any supported version
+max_version = "1.3"
+
+# Skip certificate verification (INSECURE - testing only!)
+# Optional: Default is false
+insecure_skip_verify = false
+
+# Path to custom CA certificate file for verification
+# Optional: Uses system CA bundle if not specified
+# ca_cert_file = "/path/to/custom-ca.pem"
+
+# Client certificate file for mutual TLS authentication
+# Optional: Must be paired with client_key_file
+# client_cert_file = "/path/to/client-cert.pem"
+
+# Client private key file for mutual TLS authentication
+# Optional: Must be paired with client_cert_file
+# client_key_file = "/path/to/client-key.pem"
+
+# Allowed cipher suites (empty = Go defaults)
+# Optional: Available options:
+#   - TLS_AES_128_GCM_SHA256
+#   - TLS_AES_256_GCM_SHA384
+#   - TLS_CHACHA20_POLY1305_SHA256
+#   - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+#   - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+#   - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+#   - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+cipher_suites = [
+    "TLS_AES_256_GCM_SHA384",
+    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+]
+
+# Server name for SNI (Server Name Indication)
+# Optional: Overrides hostname from URL
+server_name = "custom-mirror.example.com"
+
+# Snapshot Configuration
+# =====================
+[snapshot]
+# Base path where snapshots will be stored
+# Optional: Default is "/var/lib/go-apt-mirror/snapshots"
+path = "/var/lib/mirrorctl/snapshots"
+
+# Default snapshot name format (Go time format)
+# Optional: Default is "2006-01-02T15-04-05Z"
+# Examples:
+#   "2006-01-02T15-04-05Z"     -> 2024-01-15T10-30-00Z
+#   "2006-01-02"               -> 2024-01-15
+#   "20060102-150405"          -> 20240115-103000
+default_name_format = "2006-01-02T15-04-05Z"
+
+# Snapshot pruning/retention policy
+[snapshot.prune]
+# Number of recent snapshots to keep
+# Optional: Default is 5
+keep_last = 5
+
+# Keep snapshots within duration
+# Optional: Format examples: "7d", "2w", "30d"
+# Supported units: d (days), w (weeks)
+keep_within = "30d"
+
+# Mirror Configurations
+# ====================
+
+# Ubuntu Main Mirror
+[mirrors.ubuntu-noble]
+# Repository URL (http or https)
+# REQUIRED
+url = "https://archive.ubuntu.com/ubuntu/"
+
+# Distribution suites to mirror
+# REQUIRED: For flat repositories, append "/" to suite name
+suites = ["noble", "noble-updates", "noble-security"]
+
+# Repository sections to mirror
+# REQUIRED for non-flat repositories
+sections = ["main", "restricted", "universe", "multiverse"]
+
+# Architectures to mirror
+# REQUIRED for non-flat repositories
+# Note: "all" architecture is automatically included
+architectures = ["amd64", "arm64"]
+
+# Include source packages
+# Optional: Default is false
+mirror_source = true
+
+# PGP key file path for signature verification
+# Optional: Uses system keyring if not specified
+# pgp_key_path = "/etc/apt/trusted.gpg.d/ubuntu-archive-keyring.gpg"
+
+# Disable PGP signature verification
+# Optional: Default is false (verification enabled)
+no_pgp_check = false
+
+# Automatically publish new syncs to staging
+# Optional: Default is false
+publish_to_staging = true
+
+# Package filtering configuration
+[mirrors.ubuntu-noble.filters]
+# Number of package versions to keep (newest first)
+# Optional: 0 = keep all versions
+keep_versions = 3
+
+# Patterns for excluding packages (regex)
+# Optional: Empty = no exclusions
+exclude_patterns = [
+    ".*-dbg$",          # Debug packages
+    ".*-dev$",          # Development packages
+    "linux-image-.*"    # Kernel images (example)
+]
+
+# Per-mirror snapshot configuration overrides
+[mirrors.ubuntu-noble.snapshot]
+# Override global snapshot name format for this mirror
+# Optional: Uses global default if not specified
+default_name_format = "ubuntu-2006-01-02"
+
+# Override global pruning policy for this mirror
+[mirrors.ubuntu-noble.snapshot.prune]
+keep_last = 10
+keep_within = "60d"
+
+# Debian Main Mirror (Flat Repository Example)
+[mirrors.debian-flat]
+url = "https://deb.debian.org/debian/"
+# For flat repositories, append "/" to indicate flat format
+suites = ["experimental/"]
+# Flat repositories don't use sections or architectures
+# sections and architectures should be omitted for flat repos
+
+# Custom Mirror with Minimal Configuration
+[mirrors.custom-mirror]
+url = "https://packages.example.com/apt/"
+suites = ["stable"]
+sections = ["main"]
+architectures = ["amd64"]
+
+# Another mirror showing TLS client auth and custom settings
+[mirrors.secure-mirror]
+url = "https://secure-repo.company.com/debian/"
+suites = ["bullseye", "bullseye-updates"]
+sections = ["main", "contrib"]
+architectures = ["amd64", "arm64"]
+mirror_source = false
+publish_to_staging = false
+
+# Override TLS settings for this specific mirror would require
+# separate configuration at the global [tls] level since TLS
+# configuration is global, not per-mirror
