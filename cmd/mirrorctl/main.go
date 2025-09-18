@@ -532,7 +532,7 @@ func checkTLSVersions(config *mirror.Config, host, port string) {
 			fmt.Printf("    %s: Not Supported (%v)\n", tlsVer.name, err)
 		} else {
 			fmt.Printf("    %s: Supported\n", tlsVer.name)
-			conn.Close()
+			conn.Close() // #nosec G104 - TLS test connection cleanup, ignore errors
 		}
 	}
 	fmt.Println()

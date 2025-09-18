@@ -2,8 +2,8 @@ package apt
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/md5"  // #nosec G501 - MD5 required for APT repository compatibility
+	"crypto/sha1" // #nosec G505 - SHA1 required for APT repository compatibility
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
@@ -68,8 +68,8 @@ func (fi *FileInfo) HasChecksum() bool {
 
 // CalcChecksums calculates checksums and stores them in fi.
 func (fi *FileInfo) CalcChecksums(data []byte) {
-	md5sum := md5.Sum(data)
-	sha1sum := sha1.Sum(data)
+	md5sum := md5.Sum(data)   // #nosec G401 - MD5 required for APT repository compatibility
+	sha1sum := sha1.Sum(data) // #nosec G401 - SHA1 required for APT repository compatibility
 	sha256sum := sha256.Sum256(data)
 	sha512sum := sha512.Sum512(data)
 	fi.size = uint64(len(data))
@@ -211,8 +211,8 @@ func (fi *FileInfo) UnmarshalJSON(data []byte) error {
 // CopyWithFileInfo copies from src to dst until either EOF is reached
 // on src or an error occurs, and returns FileInfo calculated while copying.
 func CopyWithFileInfo(dst io.Writer, src io.Reader, p string) (*FileInfo, error) {
-	md5hash := md5.New()
-	sha1hash := sha1.New()
+	md5hash := md5.New()   // #nosec G401 - MD5 required for APT repository compatibility
+	sha1hash := sha1.New() // #nosec G401 - SHA1 required for APT repository compatibility
 	sha256hash := sha256.New()
 	sha512hash := sha512.New()
 
@@ -224,7 +224,7 @@ func CopyWithFileInfo(dst io.Writer, src io.Reader, p string) (*FileInfo, error)
 
 	return &FileInfo{
 		path:      p,
-		size:      uint64(n), // io.Copy returns int64, conversion is safe as n >= 0
+		size:      uint64(n), // #nosec G115 - io.Copy returns int64, conversion is safe as n >= 0
 		md5sum:    md5hash.Sum(nil),
 		sha1sum:   sha1hash.Sum(nil),
 		sha256sum: sha256hash.Sum(nil),

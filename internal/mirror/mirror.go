@@ -201,7 +201,7 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 
 func (m *Mirror) replaceLink() error {
 	tname := filepath.Join(m.dir, m.id+".tmp")
-	os.Remove(tname)
+	os.Remove(tname) // #nosec G104 - cleanup operation, ignore errors
 	err := os.Symlink(filepath.Join(m.storage.Dir(), m.id), tname)
 	if err != nil {
 		return err

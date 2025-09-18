@@ -118,7 +118,7 @@ func (s *Storage) Save() error {
 	defer s.mu.Unlock()
 
 	infoPath := filepath.Join(s.dir, infoJSON)
-	f, err := os.OpenFile(infoPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644) // #nosec G304 - infoPath is constructed from validated config.Dir and constant infoJSON
+	f, err := os.OpenFile(infoPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644) // #nosec G304,G302 - infoPath validated, 0644 needed for web server access
 	if err != nil {
 		return err
 	}

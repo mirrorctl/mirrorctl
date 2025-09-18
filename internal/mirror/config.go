@@ -46,7 +46,7 @@ type TLSConfig struct {
 // BuildTLSConfig creates a *tls.Config from the TLSConfig settings
 func (t *TLSConfig) BuildTLSConfig() (*tls.Config, error) {
 	config := &tls.Config{
-		InsecureSkipVerify: t.InsecureSkipVerify,
+		InsecureSkipVerify: t.InsecureSkipVerify, // #nosec G402 - User-configurable for testing/development environments
 		ServerName:         t.ServerName,
 	}
 

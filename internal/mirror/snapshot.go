@@ -267,6 +267,7 @@ func (sm *SnapshotManager) CreateSnapshot(mirror, snapshotName string, force boo
 	}
 
 	// Create snapshot directory
+	// #nosec G301 - 0755 needed for web server directory access
 	if err := os.MkdirAll(snapshotPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
@@ -275,7 +276,7 @@ func (sm *SnapshotManager) CreateSnapshot(mirror, snapshotName string, force boo
 	err = sm.createHardLinks(resolvedLivePath, snapshotPath)
 	if err != nil {
 		// Clean up on failure
-		os.RemoveAll(snapshotPath)
+		os.RemoveAll(snapshotPath) // #nosec G104 - cleanup on failure, ignore errors
 		return "", fmt.Errorf("failed to create hard links: %w", err)
 	}
 
@@ -328,6 +329,7 @@ func (sm *SnapshotManager) PublishSnapshot(mirror, snapshotName string) error {
 
 	// Create live directory if it doesn't exist
 	liveDir := filepath.Dir(livePath)
+	// #nosec G301 - 0755 needed for web server directory access
 	if err := os.MkdirAll(liveDir, 0755); err != nil {
 		return fmt.Errorf("failed to create live directory: %w", err)
 	}
@@ -336,7 +338,7 @@ func (sm *SnapshotManager) PublishSnapshot(mirror, snapshotName string) error {
 	tempLink := livePath + ".tmp"
 
 	// Remove temporary link if it exists
-	os.Remove(tempLink)
+	os.Remove(tempLink) // #nosec G104 - cleanup operation, ignore errors
 
 	// Create new symlink
 	if err := os.Symlink(snapshotPath, tempLink); err != nil {
@@ -344,11 +346,11 @@ func (sm *SnapshotManager) PublishSnapshot(mirror, snapshotName string) error {
 	}
 
 	// Remove existing live symlink before renaming (ignore errors)
-	os.Remove(livePath)
+	os.Remove(livePath) // #nosec G104 - cleanup operation, errors expected and ignored
 
 	// Atomically replace the live symlink
 	if err := os.Rename(tempLink, livePath); err != nil {
-		os.Remove(tempLink) // Clean up on failure
+		os.Remove(tempLink) // #nosec G104 - cleanup operation, ignore errors // #nosec G104 - cleanup on failure, ignore errors
 		return fmt.Errorf("failed to update live symlink: %w", err)
 	}
 
@@ -367,6 +369,7 @@ func (sm *SnapshotManager) PublishSnapshotToStaging(mirror, snapshotName string)
 
 	// Create staging directory if it doesn't exist
 	stagingDir := filepath.Dir(stagingPath)
+	// #nosec G301 - 0755 needed for web server directory access
 	if err := os.MkdirAll(stagingDir, 0755); err != nil {
 		return fmt.Errorf("failed to create staging directory: %w", err)
 	}
@@ -375,7 +378,7 @@ func (sm *SnapshotManager) PublishSnapshotToStaging(mirror, snapshotName string)
 	tempLink := stagingPath + ".tmp"
 
 	// Remove temporary link if it exists
-	os.Remove(tempLink)
+	os.Remove(tempLink) // #nosec G104 - cleanup operation, ignore errors
 
 	// Create new symlink
 	if err := os.Symlink(snapshotPath, tempLink); err != nil {
@@ -383,11 +386,11 @@ func (sm *SnapshotManager) PublishSnapshotToStaging(mirror, snapshotName string)
 	}
 
 	// Remove existing staging symlink before renaming (ignore errors)
-	os.Remove(stagingPath)
+	os.Remove(stagingPath) // #nosec G104 - cleanup operation, errors expected and ignored
 
 	// Atomically replace the staging symlink
 	if err := os.Rename(tempLink, stagingPath); err != nil {
-		os.Remove(tempLink) // Clean up on failure
+		os.Remove(tempLink) // #nosec G104 - cleanup operation, ignore errors // #nosec G104 - cleanup on failure, ignore errors
 		return fmt.Errorf("failed to update staging symlink: %w", err)
 	}
 
@@ -420,6 +423,7 @@ func (sm *SnapshotManager) PromoteSnapshot(mirror string) (string, error) {
 
 	// Create live directory if it doesn't exist
 	liveDir := filepath.Dir(livePath)
+	// #nosec G301 - 0755 needed for web server directory access
 	if err := os.MkdirAll(liveDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create live directory: %w", err)
 	}
@@ -428,7 +432,7 @@ func (sm *SnapshotManager) PromoteSnapshot(mirror string) (string, error) {
 	tempLink := livePath + ".tmp"
 
 	// Remove temporary link if it exists
-	os.Remove(tempLink)
+	os.Remove(tempLink) // #nosec G104 - cleanup operation, ignore errors
 
 	// Create new symlink pointing to the same target as staging
 	if err := os.Symlink(target, tempLink); err != nil {
@@ -436,11 +440,11 @@ func (sm *SnapshotManager) PromoteSnapshot(mirror string) (string, error) {
 	}
 
 	// Remove existing production symlink before renaming (ignore errors)
-	os.Remove(livePath)
+	os.Remove(livePath) // #nosec G104 - cleanup operation, errors expected and ignored
 
 	// Atomically replace the production symlink
 	if err := os.Rename(tempLink, livePath); err != nil {
-		os.Remove(tempLink) // Clean up on failure
+		os.Remove(tempLink) // #nosec G104 - cleanup operation, ignore errors // #nosec G104 - cleanup on failure, ignore errors
 		return "", fmt.Errorf("failed to update production symlink: %w", err)
 	}
 
@@ -463,7 +467,7 @@ func (sm *SnapshotManager) DeleteSnapshot(mirror, snapshotName string, force boo
 			return fmt.Errorf("cannot delete snapshot %s as it is currently published for mirror %s (use --force to override)", snapshotName, mirror)
 		}
 		// With --force, remove the live symlink first
-		os.Remove(sm.GetLivePath(mirror))
+		os.Remove(sm.GetLivePath(mirror)) // #nosec G104 - force cleanup, ignore errors
 	}
 
 	// Check if snapshot is currently staged
@@ -473,7 +477,7 @@ func (sm *SnapshotManager) DeleteSnapshot(mirror, snapshotName string, force boo
 			return fmt.Errorf("cannot delete snapshot %s as it is currently staged for mirror %s (use --force to override)", snapshotName, mirror)
 		}
 		// With --force, remove the staging symlink first
-		os.Remove(sm.GetStagingPath(mirror))
+		os.Remove(sm.GetStagingPath(mirror)) // #nosec G104 - force cleanup, ignore errors
 	}
 
 	// Remove the snapshot directory

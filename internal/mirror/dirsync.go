@@ -33,7 +33,7 @@ func DirSync(d string) error {
 		return errors.Wrap(err, "DirSync")
 	}
 
-	f, err := os.OpenFile(d, os.O_RDONLY, 0755) // #nosec G304 - path d is validated by validateDirectoryPath
+	f, err := os.OpenFile(d, os.O_RDONLY, 0755) // #nosec G304,G302 - path validated, 0755 needed for directory access
 	if err != nil {
 		return err
 	}

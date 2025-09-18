@@ -18,7 +18,6 @@ const (
 	lockFilename = ".lock"
 )
 
-
 // validateLockFilePath validates that a lock file path is safe for use.
 // It prevents directory traversal attacks by ensuring the path is within the config directory.
 func validateLockFilePath(lockFile, baseDir string) error {
@@ -227,7 +226,7 @@ func Run(config *Config, mirrors []string, noPGPCheck, quiet, dryRun, force bool
 	file, err := os.Open(lockFile) // #nosec G304 - lockFile path is validated by validateLockFilePath
 	switch {
 	case os.IsNotExist(err):
-		file2, err := os.OpenFile(lockFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644) // #nosec G304 - lockFile path is validated by validateLockFilePath
+		file2, err := os.OpenFile(lockFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644) // #nosec G304,G302 - lockFile path validated, 0644 standard for lock files
 		if err != nil {
 			return err
 		}
