@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"math"
 	"path"
 
 	"github.com/cockroachdb/errors"
@@ -146,6 +147,9 @@ type fileInfoJSON struct {
 func (fi *FileInfo) MarshalJSON() ([]byte, error) {
 	var fij fileInfoJSON
 	fij.Path = fi.path
+	if fi.size > math.MaxInt64 {
+		return nil, errors.Newf("file size %d exceeds maximum int64 value", fi.size)
+	}
 	fij.Size = int64(fi.size)
 	if fi.md5sum != nil {
 		fij.MD5Sum = hex.EncodeToString(fi.md5sum)
@@ -169,6 +173,9 @@ func (fi *FileInfo) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	fi.path = fij.Path
+	if fij.Size < 0 {
+		return errors.Newf("negative file size %d not allowed", fij.Size)
+	}
 	fi.size = uint64(fij.Size)
 	if fij.MD5Sum != "" {
 		md5sum, err := hex.DecodeString(fij.MD5Sum)
@@ -217,7 +224,7 @@ func CopyWithFileInfo(dst io.Writer, src io.Reader, p string) (*FileInfo, error)
 
 	return &FileInfo{
 		path:      p,
-		size:      uint64(n),
+		size:      uint64(n), // io.Copy returns int64, conversion is safe as n >= 0
 		md5sum:    md5hash.Sum(nil),
 		sha1sum:   sha1hash.Sum(nil),
 		sha256sum: sha256hash.Sum(nil),

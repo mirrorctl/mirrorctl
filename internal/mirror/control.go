@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -16,6 +17,26 @@ import (
 const (
 	lockFilename = ".lock"
 )
+
+
+// validateLockFilePath validates that a lock file path is safe for use.
+// It prevents directory traversal attacks by ensuring the path is within the config directory.
+func validateLockFilePath(lockFile, baseDir string) error {
+	cleanLock := filepath.Clean(lockFile)
+	cleanBase := filepath.Clean(baseDir)
+
+	// Check for directory traversal attempts
+	if strings.Contains(lockFile, "..") {
+		return errors.New("unsafe lock file path (contains directory traversal): " + lockFile)
+	}
+
+	// Ensure lock file is within the base directory
+	if !strings.HasPrefix(cleanLock, cleanBase) {
+		return errors.New("lock file path outside of base directory: " + lockFile)
+	}
+
+	return nil
+}
 
 func updateMirrors(ctx context.Context, config *Config, mirrors []string, noPGPCheck, quiet, dryRun bool) ([]*Mirror, error) {
 	timestamp := time.Now()
@@ -197,10 +218,16 @@ func handleSnapshotting(config *Config, mirrors []*Mirror, force bool) error {
 // will be updated.
 func Run(config *Config, mirrors []string, noPGPCheck, quiet, dryRun, force bool) error {
 	lockFile := filepath.Join(config.Dir, lockFilename)
-	file, err := os.Open(lockFile)
+
+	// Validate lock file path for security
+	if err := validateLockFilePath(lockFile, config.Dir); err != nil {
+		return errors.Wrap(err, "Run")
+	}
+
+	file, err := os.Open(lockFile) // #nosec G304 - lockFile path is validated by validateLockFilePath
 	switch {
 	case os.IsNotExist(err):
-		file2, err := os.OpenFile(lockFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		file2, err := os.OpenFile(lockFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644) // #nosec G304 - lockFile path is validated by validateLockFilePath
 		if err != nil {
 			return err
 		}

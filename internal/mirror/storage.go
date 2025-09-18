@@ -82,7 +82,7 @@ func (s *Storage) Dir() string {
 func (s *Storage) Load() error {
 	infoPath := filepath.Join(s.dir, infoJSON)
 
-	f, err := os.Open(infoPath)
+	f, err := os.Open(infoPath) // #nosec G304 - infoPath is constructed from validated config.Dir and constant infoJSON
 	switch {
 	case os.IsNotExist(err):
 		return nil
@@ -118,7 +118,7 @@ func (s *Storage) Save() error {
 	defer s.mu.Unlock()
 
 	infoPath := filepath.Join(s.dir, infoJSON)
-	f, err := os.OpenFile(infoPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(infoPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644) // #nosec G304 - infoPath is constructed from validated config.Dir and constant infoJSON
 	if err != nil {
 		return err
 	}
