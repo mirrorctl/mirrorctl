@@ -22,22 +22,13 @@ builds:
     goos:
       - linux
       - darwin
-      - windows
     
     goarch:
       - amd64
       - arm64
-      - arm
-    
+
     goarm:
       - "7"
-    
-    # Ignore certain combinations that don't make sense
-    ignore:
-      - goos: windows
-        goarch: arm
-      - goos: windows
-        goarch: arm64
     
     # Build flags - inject version info like the build.sh script does
     ldflags:
@@ -59,16 +50,11 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     
     formats: [ 'tar.gz' ]
-    format_overrides:
-      - goos: windows
-        formats: [ 'zip' ]
     
     files:
       - README.md
       - LICENSE
       - cmd/mirrorctl/USAGE.md
-      - examples/**/*
-      - TLS_SECURITY.md
 
 checksum:
   name_template: "checksums.txt"
@@ -116,7 +102,7 @@ release:
   header: |
     ## mirrorctl {{ .Version }}
     
-    This release includes binaries for Linux, macOS, and Windows on multiple architectures.
+    This release includes binaries for Linux, and macOS on multiple architectures.
     
     ### Installation
     

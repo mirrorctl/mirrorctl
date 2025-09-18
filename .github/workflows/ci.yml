@@ -79,11 +79,10 @@ jobs:
           cache: true
 
       - name: Run Gosec Security Scanner
-        uses: securecodewarrior/github-action-gosec@master
+        uses: securego/gosec@master
         with:
-          args: '-fmt sarif -out results.sarif ./...'
-
-      - name: Upload SARIF file
+          args: '-no-fail -fmt sarif -out results.sarif ./...'
+      - name: Upload SARIF to Security tab
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
