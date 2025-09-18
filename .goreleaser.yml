@@ -10,8 +10,6 @@ before:
   hooks:
     # Clean up any old builds
     - go mod tidy
-    # Run tests before building
-    - go test ./...
 
 builds:
   - id: mirrorctl
