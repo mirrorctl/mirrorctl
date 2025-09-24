@@ -132,4 +132,4 @@ insecure_skip_verify = false
 # It tells the server which website's certificate you are requesting.
 # In almost all normal situations the application will automatically set the SNI based on the
 # mirror's URL. You can likely leave this commented out.
-# server_name = "packages.micorosft.com"
+# server_name = "packages.microsoft.com"
