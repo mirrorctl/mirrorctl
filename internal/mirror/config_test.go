@@ -12,7 +12,7 @@ func TestConfig(t *testing.T) {
 	t.Parallel()
 
 	c := NewConfig()
-	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
+	configPath := filepath.Join("..", "..", "examples", "configs", "mirror-secure.toml")
 	md, err := toml.DecodeFile(configPath, c)
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +76,7 @@ func TestMirrorConfig(t *testing.T) {
 	t.Parallel()
 
 	var c Config
-	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
+	configPath := filepath.Join("..", "..", "examples", "configs", "mirror-secure.toml")
 	_, err := toml.DecodeFile(configPath, &c)
 	if err != nil {
 		t.Fatal(err)

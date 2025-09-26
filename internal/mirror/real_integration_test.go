@@ -22,7 +22,7 @@ func TestRealIntegration_PublishToStaging(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Load the real config file and modify paths
-	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
+	configPath := filepath.Join("..", "..", "examples", "configs", "mirror-secure.toml")
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Skipf("skipping test: cannot read config file %s: %v", configPath, err)
@@ -148,7 +148,7 @@ func TestRealIntegration_ForceFlag(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Load and modify config
-	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
+	configPath := filepath.Join("..", "..", "examples", "configs", "mirror-secure.toml")
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Skipf("skipping test: cannot read config file %s: %v", configPath, err)
@@ -244,7 +244,7 @@ func TestRealIntegration_SnapshotListSorting(t *testing.T) {
 	}
 
 	// This test just checks the configuration parsing and mirror ordering
-	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
+	configPath := filepath.Join("..", "..", "examples", "configs", "mirror-secure.toml")
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Skipf("skipping test: cannot read config file %s: %v", configPath, err)
@@ -289,7 +289,7 @@ func TestRealIntegration_MirrorDryRun(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Load config
-	configPath := filepath.Join("..", "..", "examples", "mirror-secure.toml")
+	configPath := filepath.Join("..", "..", "examples", "configs", "mirror-secure.toml")
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Skipf("skipping test: cannot read config file %s: %v", configPath, err)
