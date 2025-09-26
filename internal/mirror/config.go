@@ -43,6 +43,25 @@ type TLSConfig struct {
 	ServerName string `toml:"server_name"`
 }
 
+// TLSOverrides defines per-repository TLS overrides
+type TLSOverrides struct {
+	// InsecureSkipVerify controls whether to skip certificate verification
+	// WARNING: Only use for testing - this is a security risk
+	InsecureSkipVerify *bool `toml:"insecure_skip_verify,omitempty"`
+
+	// CACertFile path to custom CA certificate file for verification
+	CACertFile string `toml:"ca_cert_file,omitempty"`
+
+	// ClientCertFile path to client certificate file (for mutual TLS)
+	ClientCertFile string `toml:"client_cert_file,omitempty"`
+
+	// ClientKeyFile path to client private key file (for mutual TLS)
+	ClientKeyFile string `toml:"client_key_file,omitempty"`
+
+	// ServerName for SNI (Server Name Indication) - overrides hostname
+	ServerName string `toml:"server_name,omitempty"`
+}
+
 // BuildTLSConfig creates a *tls.Config from the TLSConfig settings
 func (t *TLSConfig) BuildTLSConfig() (*tls.Config, error) {
 	config := &tls.Config{
@@ -185,6 +204,38 @@ func parseVersion(version string) int {
 	}
 }
 
+// GetEffectiveTLSConfig merges global and per-repository TLS settings.
+// Repository-specific settings override global settings where specified.
+func (mc *MirrorConfig) GetEffectiveTLSConfig(globalTLS *TLSConfig) *TLSConfig {
+	if globalTLS == nil {
+		globalTLS = &TLSConfig{} // Use empty config if global is nil
+	}
+
+	// Start with a copy of the global configuration
+	effective := *globalTLS
+
+	// Apply repository-specific overrides if they exist
+	if mc.TLS != nil {
+		if mc.TLS.InsecureSkipVerify != nil {
+			effective.InsecureSkipVerify = *mc.TLS.InsecureSkipVerify
+		}
+		if mc.TLS.CACertFile != "" {
+			effective.CACertFile = mc.TLS.CACertFile
+		}
+		if mc.TLS.ClientCertFile != "" {
+			effective.ClientCertFile = mc.TLS.ClientCertFile
+		}
+		if mc.TLS.ClientKeyFile != "" {
+			effective.ClientKeyFile = mc.TLS.ClientKeyFile
+		}
+		if mc.TLS.ServerName != "" {
+			effective.ServerName = mc.TLS.ServerName
+		}
+	}
+
+	return &effective
+}
+
 type tomlURL struct {
 	*url.URL
 }
@@ -232,6 +283,9 @@ type MirrorConfig struct {
 
 	// Snapshot configuration for this mirror
 	Snapshot *MirrorSnapshotConfig `toml:"snapshot,omitempty"`
+
+	// TLS configuration overrides for this mirror
+	TLS *TLSOverrides `toml:"tls,omitempty"`
 }
 
 // PackageFilters defines filtering rules for packages

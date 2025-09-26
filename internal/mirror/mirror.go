@@ -179,8 +179,9 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 		return nil, errors.Wrap(err, mirrorID)
 	}
 
-	// Create components
-	httpClient := NewHTTPClient(config.MaxConns, mirrorID, storage, currentStorage, &config.TLS)
+	// Create components with effective TLS configuration
+	effectiveTLS := mirrorConfig.GetEffectiveTLSConfig(&config.TLS)
+	httpClient := NewHTTPClient(config.MaxConns, mirrorID, storage, currentStorage, effectiveTLS)
 	parser := NewAPTParser(storage, mirrorConfig, mirrorID)
 
 	mirror := &Mirror{

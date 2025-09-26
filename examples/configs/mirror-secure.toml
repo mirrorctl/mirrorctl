@@ -1,0 +1,57 @@
+# Example secure mirror configuration with per-repository TLS settings
+# This configuration matches test expectations while demonstrating TLS features
+
+# Global Settings
+dir = "examples/mirror-data/"
+max_conns = 10
+
+# Global TLS Configuration
+[tls]
+min_version = "1.2"
+max_version = "1.3"
+cipher_suites = [
+    "TLS_AES_256_GCM_SHA384",
+    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+]
+
+# Logging Configuration
+[log]
+level = "info"
+format = "text"
+
+# AMLFS Noble Mirror (with TLS overrides)
+[mirrors.amlfs-noble]
+url = "https://packages.microsoft.com/repos/amlfs-noble/"
+suites = ["noble"]
+sections = ["main"]
+architectures = ["amd64"]
+publish_to_staging = true
+
+# Per-repository TLS overrides for amlfs-noble
+[mirrors.amlfs-noble.tls]
+server_name = "packages.microsoft.com"
+
+# OpenEnclave Mirror
+[mirrors.openenclave]
+url = "https://download.01.org/intel-sgx/sgx_repo/ubuntu/"
+suites = ["bionic"]
+sections = ["main"]
+architectures = ["amd64"]
+
+# REAR Mirror
+[mirrors.rear]
+url = "http://download.opensuse.org/repositories/Archiving:/Backup:/Rear/Debian_10/"
+suites = ["./"]
+# Flat repository - no sections or architectures needed
+
+# SLURM Ubuntu Noble Mirror (no staging)
+[mirrors.slurm-ubuntu-noble]
+url = "https://packages.microsoft.com/repos/slurm-ubuntu-noble/"
+suites = ["stable"]
+sections = ["main"]
+architectures = ["amd64"]
+publish_to_staging = false
+
+# Per-repository TLS overrides for slurm mirror
+[mirrors.slurm-ubuntu-noble.tls]
+server_name = "packages.microsoft.com"

@@ -181,6 +181,26 @@ architectures = ["amd64", "arm64"]
 mirror_source = false
 publish_to_staging = false
 
-# Override TLS settings for this specific mirror would require
-# separate configuration at the global [tls] level since TLS
-# configuration is global, not per-mirror
+# Per-repository TLS configuration overrides
+[mirrors.secure-mirror.tls]
+# Override server name for SNI (if different from URL hostname)
+server_name = "secure-mirror.company.com"
+
+# Custom CA certificate for this repository
+ca_cert_file = "/etc/ssl/certs/company-ca.pem"
+
+# Client certificate authentication for this repository
+client_cert_file = "/etc/ssl/certs/secure-mirror-client.pem"
+client_key_file = "/etc/ssl/private/secure-mirror-client.key"
+
+# Example: Internal development mirror with relaxed security
+[mirrors.dev-internal]
+url = "https://dev-repo.internal.company.com/apt/"
+suites = ["unstable"]
+sections = ["main"]
+architectures = ["amd64"]
+
+# Override global TLS settings for internal development
+[mirrors.dev-internal.tls]
+# WARNING: Only use for internal development environments!
+insecure_skip_verify = true
