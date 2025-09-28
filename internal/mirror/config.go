@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -18,29 +20,29 @@ const (
 // TLSConfig defines TLS/HTTPS security configuration
 type TLSConfig struct {
 	// MinVersion specifies the minimum TLS version to use (1.2, 1.3)
-	MinVersion string `toml:"min_version"`
+	MinVersion string `toml:"min_version" env:"MIRRORCTL_TLS_MIN_VERSION"`
 
 	// MaxVersion specifies the maximum TLS version to use (1.2, 1.3)
-	MaxVersion string `toml:"max_version"`
+	MaxVersion string `toml:"max_version" env:"MIRRORCTL_TLS_MAX_VERSION"`
 
 	// InsecureSkipVerify controls whether to skip certificate verification
 	// WARNING: Only use for testing - this is a security risk
-	InsecureSkipVerify bool `toml:"insecure_skip_verify"`
+	InsecureSkipVerify bool `toml:"insecure_skip_verify" env:"MIRRORCTL_TLS_INSECURE_SKIP_VERIFY"`
 
 	// CACertFile path to custom CA certificate file for verification
-	CACertFile string `toml:"ca_cert_file"`
+	CACertFile string `toml:"ca_cert_file" env:"MIRRORCTL_TLS_CA_CERT_FILE"`
 
 	// ClientCertFile path to client certificate file (for mutual TLS)
-	ClientCertFile string `toml:"client_cert_file"`
+	ClientCertFile string `toml:"client_cert_file" env:"MIRRORCTL_TLS_CLIENT_CERT_FILE"`
 
 	// ClientKeyFile path to client private key file (for mutual TLS)
-	ClientKeyFile string `toml:"client_key_file"`
+	ClientKeyFile string `toml:"client_key_file" env:"MIRRORCTL_TLS_CLIENT_KEY_FILE"`
 
 	// CipherSuites specifies allowed cipher suites (empty = Go defaults)
-	CipherSuites []string `toml:"cipher_suites"`
+	CipherSuites []string `toml:"cipher_suites" env:"MIRRORCTL_TLS_CIPHER_SUITES"`
 
 	// ServerName for SNI (Server Name Indication) - overrides hostname
-	ServerName string `toml:"server_name"`
+	ServerName string `toml:"server_name" env:"MIRRORCTL_TLS_SERVER_NAME"`
 }
 
 // TLSOverrides defines per-repository TLS overrides
@@ -443,8 +445,8 @@ func (mc *MirrorConfig) MatchingIndex(filePath string) bool {
 
 // LogConfig represents slog configuration options
 type LogConfig struct {
-	Level  string `toml:"level"`
-	Format string `toml:"format"`
+	Level  string `toml:"level" env:"MIRRORCTL_LOG_LEVEL"`
+	Format string `toml:"format" env:"MIRRORCTL_LOG_FORMAT"`
 }
 
 // Apply configures the global slog logger based on the configuration
@@ -489,8 +491,8 @@ func (lc *LogConfig) Apply() error {
 //	    ...
 //	}
 type Config struct {
-	Dir      string                   `toml:"dir"`
-	MaxConns int                      `toml:"max_conns"`
+	Dir      string                   `toml:"dir" env:"MIRRORCTL_DIR"`
+	MaxConns int                      `toml:"max_conns" env:"MIRRORCTL_MAX_CONNS"`
 	Log      LogConfig                `toml:"log"`
 	TLS      TLSConfig                `toml:"tls"`
 	Snapshot *SnapshotConfig          `toml:"snapshot,omitempty"`
@@ -518,4 +520,104 @@ func NewConfig() *Config {
 	return &Config{
 		MaxConns: defaultMaxConns,
 	}
+}
+
+// ApplyEnvironmentVariables applies environment variables to the configuration.
+// Environment variables override TOML configuration values.
+// This should be called after loading the TOML configuration.
+func (c *Config) ApplyEnvironmentVariables() error {
+	return applyEnvToStruct(c)
+}
+
+// applyEnvToStruct recursively applies environment variables to struct fields
+// based on "env" tags using reflection.
+func applyEnvToStruct(v any) error {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Ptr || rv.Elem().Kind() != reflect.Struct {
+		return errors.New("applyEnvToStruct requires a pointer to struct")
+	}
+
+	rv = rv.Elem()
+	rt := rv.Type()
+
+	for i := 0; i < rv.NumField(); i++ {
+		field := rv.Field(i)
+		fieldType := rt.Field(i)
+
+		// Skip unexported fields
+		if !field.CanSet() {
+			continue
+		}
+
+		// Check for env tag
+		envTag := fieldType.Tag.Get("env")
+		if envTag != "" {
+			if err := setFieldFromEnv(field, envTag); err != nil {
+				return errors.New("failed to set field " + fieldType.Name + " from environment: " + err.Error())
+			}
+			continue
+		}
+
+		// Recursively handle nested structs
+		if field.Kind() == reflect.Struct {
+			if err := applyEnvToStruct(field.Addr().Interface()); err != nil {
+				return err
+			}
+		} else if field.Kind() == reflect.Ptr && !field.IsNil() && field.Elem().Kind() == reflect.Struct {
+			if err := applyEnvToStruct(field.Interface()); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// setFieldFromEnv sets a struct field value from an environment variable.
+func setFieldFromEnv(field reflect.Value, envVar string) error {
+	envValue := os.Getenv(envVar)
+	if envValue == "" {
+		// Environment variable not set, keep existing value
+		return nil
+	}
+
+	switch field.Kind() {
+	case reflect.String:
+		field.SetString(envValue)
+
+	case reflect.Int:
+		intVal, err := strconv.Atoi(envValue)
+		if err != nil {
+			return errors.New("invalid integer value for " + envVar + ": " + envValue)
+		}
+		field.SetInt(int64(intVal))
+
+	case reflect.Bool:
+		boolVal, err := strconv.ParseBool(envValue)
+		if err != nil {
+			return errors.New("invalid boolean value for " + envVar + ": " + envValue)
+		}
+		field.SetBool(boolVal)
+
+	case reflect.Slice:
+		if field.Type().Elem().Kind() == reflect.String {
+			// Handle string slices (like cipher_suites)
+			if envValue != "" {
+				// Split by comma and trim spaces
+				parts := strings.Split(envValue, ",")
+				values := make([]string, len(parts))
+				for i, part := range parts {
+					values[i] = strings.TrimSpace(part)
+				}
+				field.Set(reflect.ValueOf(values))
+			}
+		} else {
+			return errors.New("unsupported slice type for environment variable")
+		}
+
+	default:
+		return errors.New("unsupported field type: " + field.Kind().String())
+	}
+
+	return nil
 }

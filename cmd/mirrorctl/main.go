@@ -322,26 +322,8 @@ func runMirror(cmd *cobra.Command, args []string) {
 
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 
-	config := mirror.NewConfig()
-	meta, err := toml.DecodeFile(configPath, config)
+	config, err := loadConfig(verboseErrors)
 	if err != nil {
-		if os.IsNotExist(err) {
-			slog.Error("configuration file not found", "path", configPath)
-			slog.Info("Please create a configuration file at the default location or specify one with the --config flag.")
-			os.Exit(1)
-		}
-		errorMsg := formatError(err, verboseErrors)
-		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
-		if !verboseErrors {
-			slog.Info("run with --verbose-errors for detailed stack traces")
-		}
-		os.Exit(1)
-	}
-
-	// Check for undecoded keys which might indicate parsing stopped early
-	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-		errorMsg := formatUndecodedError(undecoded)
-		slog.Error("configuration validation failed", "error", errorMsg, "path", configPath)
 		if !verboseErrors {
 			slog.Info("run with --verbose-errors for detailed stack traces")
 		}
@@ -392,22 +374,8 @@ func runMirror(cmd *cobra.Command, args []string) {
 func runValidate(cmd *cobra.Command, _ []string) {
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 
-	config := mirror.NewConfig()
-	meta, err := toml.DecodeFile(configPath, config)
+	config, err := loadConfig(verboseErrors)
 	if err != nil {
-		if os.IsNotExist(err) {
-			slog.Error("configuration file not found", "path", configPath)
-			os.Exit(1)
-		}
-		errorMsg := formatError(err, verboseErrors)
-		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
-		os.Exit(1)
-	}
-
-	// Check for undecoded keys which might indicate parsing stopped early
-	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-		errorMsg := formatUndecodedError(undecoded)
-		slog.Error("configuration validation failed", "error", errorMsg, "path", configPath)
 		os.Exit(1)
 	}
 
@@ -445,21 +413,8 @@ func runTLSCheck(_ *cobra.Command, args []string) {
 	mirrorID := args[0]
 
 	// Load configuration file
-	config := mirror.NewConfig()
-	meta, err := toml.DecodeFile(configPath, config)
+	config, err := loadConfig(false) // Use verboseErrors=false for TLS check
 	if err != nil {
-		if os.IsNotExist(err) {
-			slog.Error("configuration file not found", "path", configPath)
-			os.Exit(1)
-		}
-		slog.Error("failed to decode config file", "error", err, "path", configPath)
-		os.Exit(1)
-	}
-
-	// Check for undecoded keys
-	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-		errorMsg := formatUndecodedError(undecoded)
-		slog.Error("configuration validation failed", "error", errorMsg, "path", configPath)
 		os.Exit(1)
 	}
 
@@ -594,21 +549,9 @@ func tlsVersionString(version uint16) string {
 
 // loadConfigForSnapshot is a helper function to load configuration for snapshot commands
 func loadConfigForSnapshot(_ bool) (*mirror.Config, error) {
-	config := mirror.NewConfig()
-	meta, err := toml.DecodeFile(configPath, config)
+	config, err := loadConfig(false) // Use verboseErrors=false for snapshot commands
 	if err != nil {
-		if os.IsNotExist(err) {
-			slog.Error("configuration file not found", "path", configPath)
-			return nil, err
-		}
 		return nil, err
-	}
-
-	// Check for undecoded keys
-	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-		errorMsg := formatUndecodedError(undecoded)
-		slog.Error("configuration validation failed", "error", errorMsg, "path", configPath)
-		return nil, fmt.Errorf("configuration validation failed")
 	}
 
 	// Apply log configuration
@@ -933,6 +876,45 @@ func runSnapshotPrune(cmd *cobra.Command, args []string) {
 			}
 		}
 	}
+}
+
+// loadConfig loads configuration from file and applies environment variable overrides
+func loadConfig(verboseErrors bool) (*mirror.Config, error) {
+	config := mirror.NewConfig()
+	meta, err := toml.DecodeFile(configPath, config)
+	if err != nil {
+		if os.IsNotExist(err) {
+			slog.Error("configuration file not found", "path", configPath)
+			slog.Info("Please create a configuration file at the default location or specify one with the --config flag.")
+			return nil, err
+		}
+		errorMsg := formatError(err, verboseErrors)
+		slog.Error("failed to decode config file", "error", errorMsg, "path", configPath)
+		return nil, err
+	}
+
+	// Check for undecoded keys which might indicate parsing stopped early
+	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		errorMsg := formatUndecodedError(undecoded)
+		slog.Error("configuration validation failed", "error", errorMsg, "path", configPath)
+		return nil, errors.New(errorMsg)
+	}
+
+	// Apply environment variable overrides
+	if err := config.ApplyEnvironmentVariables(); err != nil {
+		errorMsg := formatError(err, verboseErrors)
+		slog.Error("failed to apply environment variables", "error", errorMsg)
+		return nil, err
+	}
+
+	// Validate the final configuration
+	if err := config.Check(); err != nil {
+		errorMsg := formatError(err, verboseErrors)
+		slog.Error("configuration validation failed", "error", errorMsg)
+		return nil, err
+	}
+
+	return config, nil
 }
 
 func main() {
