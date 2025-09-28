@@ -3,22 +3,22 @@ mirrorctl
 
 `mirrorctl` is a mirror-syncing utility for Debian software repositories. It is in the family of
 applications such as [aptly](https://aptly.info) and
-[aptmirror2](https://gitlab.com/apt-mirror2/apt-mirror2), and has a solid, admin-friendly set of
+[aptmirror2](https://gitlab.com/apt-mirror2/apt-mirror2), and has an admin-friendly set of
 features.
 
 What are some of those features?
 --------------------------------
 
-* **Atomic updates** - When finalizing an updated mirror, `mirrorctl` completes its saving of the
-  downloaded packages, then points a symlink to those newly-downloaded files. This atomic
-  operation ensures that users only see a fully synced mirror, and not one that is in the process
-  of being updated.
+* **Atomic updates** - `mirrorctl` ensures zero-downtime mirror updates by downloading packages to a
+  temporary directory, then atomically switching a symlink to the new content once the sync is
+  complete. This guarantees users always see a consistent, fully-synced mirror rather than
+  one with updates in progress.
 * **Configurable snapshots** - You can create post-sync snapshots, giving you the ability to
   easily roll-back to a known-good mirror state or to facilitate reproducible builds.
 * **Staging snapshots** - Mirrors can be configured to publish to a `staging` snapshot,
-  allowing you to fully test a mirror before promoting it to production. This is especially
-  helpful in preventing any upstream package dependency issues from affecting your users or your
-  deployments.
+  allowing you to fully test mirror contents before promoting them to production. This is
+  especially helpful in preventing any upstream package dependency issues from affecting your
+  users or your deployments.
 * **Partial mirror syncs** - You can sync only the portions of a mirror that you want, based
   on a number of factors, including:
     * architecture (e.g., `amd64`)
@@ -54,7 +54,8 @@ Security-related highlights
 * **Path and symlink validation** - `mirrorctl` also blocks directory traversal attempts,
   restricts symlinks to approved directories, and validates all file paths. This prevents
   malicious repository metadata from accessing files outside of prescribed boundaries.
-* **Up to date and well-maintained components** - 
+* **Up to date and well-maintained components** - We stay up-to-date with dependency updates and
+  provide a Software Bill of Materials for dependency validation.
 
 Build
 -----
