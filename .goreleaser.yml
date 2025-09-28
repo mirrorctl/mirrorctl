@@ -56,12 +56,6 @@ archives:
       - LICENSE
       - cmd/mirrorctl/USAGE.md
 
-# Generate SBOMs after archives are created
-after:
-  hooks:
-    - cmd: sh -c 'for archive in dist/*.tar.gz; do syft scan "$archive" --output spdx-json="${archive%.tar.gz}.spdx.json" --output cyclonedx-json="${archive%.tar.gz}.cyclonedx.json"; done'
-      env:
-        - SYFT_CHECK_FOR_APP_UPDATE=false
 
 checksum:
   name_template: "checksums.txt"
@@ -104,9 +98,6 @@ release:
   prerelease: auto
   mode: replace
 
-  extra_files:
-    - glob: dist/*.spdx.json
-    - glob: dist/*.cyclonedx.json
   
   name_template: "Release {{ .Version }}"
   
@@ -129,8 +120,8 @@ release:
     All binaries are checksummed for integrity verification. See `checksums.txt` for SHA256 hashes.
 
     Software Bill of Materials (SBOM) files are included for supply chain security:
-    - `*_sbom.spdx.json` - SPDX format SBOM
-    - `*_sbom.cyclonedx.json` - CycloneDX format SBOM
+    - `mirrorctl_project.spdx.json` / `mirrorctl_project.cyclonedx.json` - Project SBOM
+    - `mirrorctl_*_*.spdx.json` / `mirrorctl_*_*.cyclonedx.json` - Binary SBOMs
 
 # Homebrew tap (optional - uncomment if you want to publish to Homebrew)
 # brews:
