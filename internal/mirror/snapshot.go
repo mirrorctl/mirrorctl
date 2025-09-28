@@ -69,7 +69,7 @@ func (s *SnapshotInfo) Status() string {
 func NewSnapshotManager(config *SnapshotConfig, livePath string) *SnapshotManager {
 	// Set defaults if not configured
 	if config.Path == "" {
-		config.Path = "/var/lib/go-apt-mirror/snapshots"
+		config.Path = "/var/lib/mirrorctl/snapshots"
 	}
 	if config.DefaultNameFormat == "" {
 		config.DefaultNameFormat = "2006-01-02T15-04-05Z"

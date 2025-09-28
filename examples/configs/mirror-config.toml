@@ -1,23 +1,5 @@
 # mirrorctl Configuration File
 # Complete example showing all available configuration options
-#
-# Environment Variable Support:
-# ============================
-# All configuration options can be overridden using environment variables with the MIRRORCTL prefix.
-# Environment variables take precedence over configuration file values.
-#
-# Examples:
-#   export MIRRORCTL_DIR="/custom/mirror/path"
-#   export MIRRORCTL_MAX_CONNS=20
-#   export MIRRORCTL_LOG_LEVEL=debug
-#   export MIRRORCTL_LOG_FORMAT=json
-#   export MIRRORCTL_TLS_MIN_VERSION=1.3
-#   export MIRRORCTL_TLS_INSECURE_SKIP_VERIFY=true
-#   export MIRRORCTL_TLS_CIPHER_SUITES="TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
-#
-# For boolean values, use: true, false, 1, 0, on, off, yes, no
-# For arrays (like cipher_suites), use comma-separated values
-
 # Global Settings
 # ===============
 
@@ -89,7 +71,7 @@ server_name = "custom-mirror.example.com"
 # =====================
 [snapshot]
 # Base path where snapshots will be stored
-# Optional: Default is "/var/lib/go-apt-mirror/snapshots"
+# Optional: Default is "/var/lib/mirrorctl/snapshots"
 path = "/var/lib/mirrorctl/snapshots"
 
 # Default snapshot name format (Go time format)

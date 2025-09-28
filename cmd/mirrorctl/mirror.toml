@@ -1,6 +1,6 @@
 # Directory to store mirrored files and other control files.
-# The directory must be writable by go-apt-mirror.
-dir = "/var/spool/go-apt-mirror"
+# The directory must be writable by mirrorctl.
+dir = "/var/spool/mirrorctl"
 
 # Maximum concurrent connections for an upstream server.
 # Setting this 0 disables limit on the number of connections.

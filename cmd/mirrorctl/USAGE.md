@@ -1,18 +1,18 @@
-How to configure and run go-apt-mirror
+How to configure and run mirrorctl
 ======================================
 
 Synopsis
 --------
 
 ```
-go-apt-mirror [flags] [mirror-ids...]
-go-apt-mirror [command]
+mirrorctl [flags] [mirror-ids...]
+mirrorctl [command]
 ```
 
-go-apt-mirror is a console application for creating and maintaining mirrors of Debian package repositories.
+mirrorctl is a console application for creating and maintaining mirrors of Debian package repositories.
 Run it in your shell, or use `sudo -u USER` to run it as USER.
 
-If `mirror-ids` arguments are given, go-apt-mirror updates only the specified
+If `mirror-ids` arguments are given, mirrorctl updates only the specified
 Debian repository mirrors. With no arguments, it updates all mirrors
 defined in the configuration file.
 
@@ -21,19 +21,19 @@ Examples
 
 ```bash
 # Mirror all configured repositories
-go-apt-mirror
+mirrorctl
 
 # Mirror only specific repositories
-go-apt-mirror ubuntu security
+mirrorctl ubuntu security
 
 # Use custom configuration file
-go-apt-mirror --config /path/to/custom.toml
+mirrorctl --config /path/to/custom.toml
 
 # Show version information
-go-apt-mirror --version
+mirrorctl --version
 
 # Get help
-go-apt-mirror --help
+mirrorctl --help
 ```
 
 Available Commands
@@ -57,7 +57,7 @@ Flags
 Configuration
 -------------
 
-go-apt-mirror reads configurations from a [TOML][] file.  
+mirrorctl reads configurations from a [TOML][] file.  
 The default location is `/etc/mirrorctl/mirror.toml`.
 
 A sample configuration file is available [here](mirror.toml).
@@ -66,7 +66,7 @@ A sample configuration file is available [here](mirror.toml).
 
 ```toml
 # Directory to store mirrored files and control files
-dir = "/var/spool/go-apt-mirror"
+dir = "/var/spool/mirrorctl"
 
 # Maximum concurrent connections per upstream server
 max_conns = 10
@@ -88,13 +88,13 @@ mirror_source = false
 Proxy Support
 -------------
 
-go-apt-mirror uses HTTP proxy as specified in [`ProxyFromEnvironment`](https://golang.org/pkg/net/http/#ProxyFromEnvironment).
+mirrorctl uses HTTP proxy as specified in [`ProxyFromEnvironment`](https://golang.org/pkg/net/http/#ProxyFromEnvironment).
 Set the `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables as needed.
 
 Logging
 -------
 
-go-apt-mirror uses Go's standard `slog` library for structured logging. Log level and format can be configured via the configuration file.
+mirrorctl uses Go's standard `slog` library for structured logging. Log level and format can be configured via the configuration file.
 
 Shell Completion
 ---------------
@@ -103,16 +103,16 @@ Generate shell completion scripts:
 
 ```bash
 # Bash
-go-apt-mirror completion bash > /etc/bash_completion.d/go-apt-mirror
+mirrorctl completion bash > /etc/bash_completion.d/mirrorctl
 
 # Zsh
-go-apt-mirror completion zsh > /usr/local/share/zsh/site-functions/_go-apt-mirror
+mirrorctl completion zsh > /usr/local/share/zsh/site-functions/_mirrorctl
 
 # Fish
-go-apt-mirror completion fish > ~/.config/fish/completions/go-apt-mirror.fish
+mirrorctl completion fish > ~/.config/fish/completions/mirrorctl.fish
 
 # PowerShell
-go-apt-mirror completion powershell > go-apt-mirror.ps1
+mirrorctl completion powershell > mirrorctl.ps1
 ```
 
 Build Information
@@ -121,5 +121,5 @@ Build Information
 The version information includes build details when built with proper build flags:
 
 ```bash
-go build -ldflags "-X main.version=1.0.0 -X main.commit=$(git rev-parse HEAD) -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" ./cmd/go-apt-mirror
+go build -ldflags "-X main.version=1.0.0 -X main.commit=$(git rev-parse HEAD) -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" ./cmd/mirrorctl
 ```

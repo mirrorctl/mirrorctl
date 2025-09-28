@@ -1,4 +1,4 @@
 /*
-Package mirror implements main logic for go-apt-mirror.
+Package mirror implements main logic for mirrorctl.
 */
 package mirror

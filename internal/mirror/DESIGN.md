@@ -10,12 +10,12 @@ symlinks, as symlinks can be replaced atomically with rename(2).
 Directory structure
 -------------------
 
-go-apt-mirror stores all data under a directory specified in the
+mirrorctl stores all data under a directory specified in the
 configuration file.  Under the directory, data are structured as:
 
 ```
 (root)
-    +- .lock              Lock file to prevent running multiple go-apt-mirror.
+    +- .lock              Lock file to prevent running multiple mirrorctl.
     +- MIRROR             Symlink to .MIRROR.DATETIME/MIRROR directory.
     +- .MIRROR.DATETIME
         +- info.json      Checksum information.
@@ -28,18 +28,18 @@ configuration file.  Under the directory, data are structured as:
 ```
 
 where MIRROR and MIRROR2 are identifiers for each mirror defined
-in the configuration file.  DATETIME is the timestamp when go-apt-mirror
+in the configuration file.  DATETIME is the timestamp when mirrorctl
 starts mirroring.
 
 Checksum verification
 ---------------------
 
-go-apt-mirror validates downloaded item with checksums provided by
+mirrorctl validates downloaded item with checksums provided by
 APT indices such as `Release` or `Packages.gz`.
 
 Reusing items
 -------------
 
-go-apt-mirror reuses previously downloaded items if they are unchanged.
-In order to check items quickly, go-apt-mirror keeps checksums in
+mirrorctl reuses previously downloaded items if they are unchanged.
+In order to check items quickly, mirrorctl keeps checksums in
 `info.json` file.
