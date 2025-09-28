@@ -10,6 +10,8 @@ before:
   hooks:
     # Clean up any old builds
     - go mod tidy
+    # Install syft for SBOM generation
+    - sh -c 'if ! command -v syft >/dev/null 2>&1; then curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin; fi'
 
 builds:
   - id: mirrorctl
@@ -42,6 +44,12 @@ builds:
     # Build mode
     mod_timestamp: "{{ .CommitTimestamp }}"
 
+    # Generate SBOM for each built binary
+    post_hooks:
+      - cmd: syft scan {{ .Path }} --output spdx-json={{ .Path }}.spdx.json --output cyclonedx-json={{ .Path }}.cyclonedx.json
+        env:
+          - SYFT_CHECK_FOR_APP_UPDATE=false
+
 archives:
   - ids: [ mirrorctl ]
 
@@ -53,6 +61,21 @@ archives:
       - README.md
       - LICENSE
       - cmd/mirrorctl/USAGE.md
+
+# Generate SBOMs for the project
+sboms:
+  - artifacts: archive
+    documents:
+      - "{{ .ProjectName }}_{{ .Version }}_sbom.spdx.json"
+      - "{{ .ProjectName }}_{{ .Version }}_sbom.cyclonedx.json"
+    cmd: syft
+    args:
+      - scan
+      - "{{ .ArtifactPath }}"
+      - --output=spdx-json={{ .ProjectName }}_{{ .Version }}_sbom.spdx.json
+      - --output=cyclonedx-json={{ .ProjectName }}_{{ .Version }}_sbom.cyclonedx.json
+    env:
+      - SYFT_CHECK_FOR_APP_UPDATE=false
 
 checksum:
   name_template: "checksums.txt"
@@ -110,10 +133,14 @@ release:
 
   footer: |
     **Full Changelog**: https://github.com/mirrorctl/mirrorctl/compare/{{ .PreviousTag }}...{{ .Tag }}
-    
-    ### Checksums
-    
+
+    ### Checksums & SBOM
+
     All binaries are checksummed for integrity verification. See `checksums.txt` for SHA256 hashes.
+
+    Software Bill of Materials (SBOM) files are included for supply chain security:
+    - `*_sbom.spdx.json` - SPDX format SBOM
+    - `*_sbom.cyclonedx.json` - CycloneDX format SBOM
 
 # Homebrew tap (optional - uncomment if you want to publish to Homebrew)
 # brews:

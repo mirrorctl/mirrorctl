@@ -59,3 +59,13 @@ GOOS="${XC_OS}" GOARCH="${XC_ARCH}" go build \
     -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" \
     -o "bin/${TARGET}" \
     ./cmd/${TARGET}
+
+# Generate SBOM if syft is available
+if command -v syft >/dev/null 2>&1; then
+    echo "Generating SBOM for ${TARGET}..."
+    syft scan "bin/${TARGET}" --output spdx-json="bin/${TARGET}.spdx.json" --output cyclonedx-json="bin/${TARGET}.cyclonedx.json"
+    echo "SBOM files generated: bin/${TARGET}.spdx.json, bin/${TARGET}.cyclonedx.json"
+else
+    echo "Warning: syft not found. Install syft to generate SBOM files:"
+    echo "  curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin"
+fi

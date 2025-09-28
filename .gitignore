@@ -19,3 +19,9 @@ pkg/
 *.tgz
 bin
 TODO.md
+
+# SBOM files (generated during build)
+*.sbom.*
+*.spdx.json
+*.cyclonedx.json
+sbom.*.json
