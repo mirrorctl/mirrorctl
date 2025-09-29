@@ -57,6 +57,24 @@ archives:
       - cmd/mirrorctl/USAGE.md
 
 
+sboms:
+  - # Generate SBOM for the entire project source code.
+    # This provides a bill of materials for the repository itself.
+    id: project-sbom
+    artifacts: project
+    documents:
+      - "{{ .ProjectName }}_project.spdx.json"
+      - "{{ .ProjectName }}_project.cyclonedx.json"
+
+  - # Generate an SBOM for each release archive (tar.gz).
+    # This provides a bill of materials specific to the contents of each compiled binary.
+    id: archive-sboms
+    artifacts: archive
+    documents:
+      - "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.spdx.json"
+      - "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.cyclonedx.json"
+
+
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
