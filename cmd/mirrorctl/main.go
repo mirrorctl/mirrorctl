@@ -84,15 +84,21 @@ var versionCmd = &cobra.Command{
 	},
 }
 
-var validateCmd = &cobra.Command{
-	Use:   "validate",
+var checkCmd = &cobra.Command{
+	Use:   "check",
+	Short: "Perform validation and diagnostic checks",
+	Long:  `Perform various validation and diagnostic checks on configuration and mirror connectivity.`,
+}
+
+var checkConfigCmd = &cobra.Command{
+	Use:   "config",
 	Short: "Validate the configuration file",
 	Long:  `Validate the configuration file and report any issues.`,
 	Run:   runValidate,
 }
 
-var tlsCheckCmd = &cobra.Command{
-	Use:   "tls-check [mirror-id]",
+var checkTLSCmd = &cobra.Command{
+	Use:   "tls [mirror-id]",
 	Short: "Check TLS configuration and capabilities for a mirror",
 	Long: `Performs a detailed TLS handshake and certificate check against the remote server for a configured mirror.
 
@@ -100,8 +106,8 @@ This command helps diagnose TLS connection issues by testing supported TLS versi
 negotiated cipher suites, and examining the certificate chain.
 
 Examples:
-  mirrorctl tls-check amlfs-noble
-  mirrorctl tls-check openenclave`,
+  mirrorctl check tls amlfs-noble
+  mirrorctl check tls openenclave`,
 	Args: cobra.ExactArgs(1),
 	Run:  runTLSCheck,
 }
@@ -199,9 +205,12 @@ Examples:
 func init() {
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(validateCmd)
-	rootCmd.AddCommand(tlsCheckCmd)
+	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(snapshotCmd)
+
+	// Add check subcommands
+	checkCmd.AddCommand(checkConfigCmd)
+	checkCmd.AddCommand(checkTLSCmd)
 
 	// Add snapshot subcommands
 	snapshotCmd.AddCommand(snapshotCreateCmd)

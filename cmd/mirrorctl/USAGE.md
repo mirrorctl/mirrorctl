@@ -41,9 +41,31 @@ Available Commands
 
 | Command      | Description                           |
 | ------------ | ------------------------------------- |
-| `help`       | Help about any command                |
+| `sync`       | Synchronize one or more APT repositories |
+| `check`      | Perform validation and diagnostic checks |
+| `snapshot`   | Manage repository snapshots           |
 | `version`    | Print version information             |
 | `completion` | Generate shell autocompletion scripts |
+| `help`       | Help about any command                |
+
+### Check Commands
+
+| Command            | Description                                    |
+| ------------------ | ---------------------------------------------- |
+| `check config`     | Validate the configuration file               |
+| `check tls [id]`   | Check TLS configuration for a mirror          |
+
+### Snapshot Commands
+
+| Command                    | Description                                    |
+| -------------------------- | ---------------------------------------------- |
+| `snapshot create [id]`     | Create a new snapshot of a mirror            |
+| `snapshot list [id...]`    | List snapshots for mirrors                   |
+| `snapshot publish [id] [snap]` | Publish a snapshot to production         |
+| `snapshot stage [id] [snap]`   | Publish a snapshot to staging            |
+| `snapshot promote [id]`    | Promote staged snapshot to production         |
+| `snapshot delete [id] [snap...]` | Delete one or more snapshots           |
+| `snapshot prune [id...]`   | Remove old snapshots per retention policy    |
 
 Flags
 -----
