@@ -70,11 +70,16 @@ sboms:
     documents:
       - "{{ .ProjectName }}_project.cyclonedx.json"
 
-  - # Generate SBOMs for each release archive.
-    id: archive-sboms
+  - # Generate SPDX SBOM for each release archive.
+    id: archive-spdx
     artifacts: archive
     documents:
       - "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.spdx.json"
+
+  - # Generate CycloneDX SBOM for each release archive.
+    id: archive-cyclonedx
+    artifacts: archive
+    documents:
       - "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.cyclonedx.json"
 
 
