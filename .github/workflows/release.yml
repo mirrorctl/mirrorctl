@@ -41,33 +41,6 @@ jobs:
           # REGISTRY_USERNAME: ${{ github.actor }}
           # REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate SBOMs
-        run: ./scripts/generate-sbom.sh
-
-      - name: Upload SBOMs to Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Get the tag name
-          TAG=${GITHUB_REF#refs/tags/}
-
-          # Upload project SBOMs
-          if [ -f "mirrorctl_project.spdx.json" ]; then
-            gh release upload "$TAG" "mirrorctl_project.spdx.json" --clobber
-          fi
-          if [ -f "mirrorctl_project.cyclonedx.json" ]; then
-            gh release upload "$TAG" "mirrorctl_project.cyclonedx.json" --clobber
-          fi
-
-          # Upload archive SBOMs
-          if [ -d "dist" ]; then
-            for sbom in dist/*.spdx.json dist/*.cyclonedx.json; do
-              if [ -f "$sbom" ]; then
-                gh release upload "$TAG" "$sbom" --clobber
-              fi
-            done
-          fi
-
   # Optional: Build and test on multiple platforms before release
   test-build:
     name: Test Build

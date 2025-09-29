@@ -58,16 +58,19 @@ archives:
 
 
 sboms:
-  - # Generate SBOM for the entire project source code.
-    # This provides a bill of materials for the repository itself.
-    id: project-sbom
+  - # Generate SPDX SBOM for the project source.
+    id: project-spdx
     artifacts: project
     documents:
       - "{{ .ProjectName }}_project.spdx.json"
+
+  - # Generate CycloneDX SBOM for the project source.
+    id: project-cyclonedx
+    artifacts: project
+    documents:
       - "{{ .ProjectName }}_project.cyclonedx.json"
 
-  - # Generate an SBOM for each release archive (tar.gz).
-    # This provides a bill of materials specific to the contents of each compiled binary.
+  - # Generate SBOMs for each release archive.
     id: archive-sboms
     artifacts: archive
     documents:
