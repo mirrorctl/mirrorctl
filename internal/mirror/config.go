@@ -155,7 +155,7 @@ func (t *TLSConfig) BuildTLSConfig() (*tls.Config, error) {
 func (t *TLSConfig) Validate() error {
 	// Warn about insecure settings
 	if t.InsecureSkipVerify {
-		slog.Warn("TLS certificate verification is DISABLED - this is insecure and should only be used for testing")
+		slog.Warn("TLS certificate verification is DISABLED - this is less secure and should be used for testing only")
 	}
 
 	// Validate that if one client cert/key is provided, the other is too

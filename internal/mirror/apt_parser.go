@@ -429,6 +429,7 @@ func (ap *APTParser) verifyPGPSignature(m *Mirror, suite string, downloaded map[
 	// PGP validation logic
 	performCheck := !m.noPGPCheck && !m.mc.NoPGPCheck
 	if !performCheck {
+		slog.Warn("PGP signature verification is DISABLED - this is less secure and should be used for testing only", "repo", m.id, "suite", suite)
 		return nil
 	}
 
