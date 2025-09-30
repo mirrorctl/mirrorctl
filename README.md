@@ -27,7 +27,7 @@ What are some of those features?
 
   And you can even filter repository downloads to:
     * exclude certain patterns (e.g., [exclude](https://packages.microsoft.com/repos/code/pool/main/c/),
-      the `code-exporloration` and `code insiders` packages, only downloading the `code` packages).
+      the `code-exporloration` and `code-insiders` packages, only downloading the `code` packages).
     * download only a prescribed number of package versions, and ignore the rest (e.g., only
       download the three most recent
       [versions of a package](https://packages.microsoft.com/repos/code/pool/main/c/code/)).
