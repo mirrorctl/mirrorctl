@@ -238,10 +238,27 @@ func (m *Mirror) PrintUsageStats() {
 	fmt.Println()
 }
 
-// Update updates mirrored files.
+// Update synchronizes the mirror with the upstream repository.
+//
+// Process flow:
+//  1. For each suite (e.g., "noble", "jammy"):
+//     a. Download and verify Release/InRelease files (with PGP signatures)
+//     b. Parse Release file to get list of Packages/Sources index files
+//     c. Download index files (with checksum verification)
+//     d. Parse index files to get list of .deb package files
+//     e. Download package files (reusing existing files when possible)
+//  2. Save metadata (info.json) for future file reuse
+//  3. Atomically update symlink to point to new mirror directory
+//
+// The entire process is atomic - the old mirror remains accessible until
+// the new one is complete and the symlink is updated.
+//
+// In dry-run mode, downloads index files to calculate sizes but skips
+// actual package downloads and storage operations.
 func (m *Mirror) Update(ctx context.Context) error {
 	itemMap := make(map[string]*apt.FileInfo)
 
+	// Phase 1: Download and process each configured suite
 	for _, suite := range m.mc.Suites {
 		err := m.updateSuite(ctx, suite, itemMap, m.quiet)
 		if err != nil {
@@ -256,12 +273,14 @@ func (m *Mirror) Update(ctx context.Context) error {
 		return nil
 	}
 
+	// Phase 2: Persist metadata for future incremental updates
 	// all files are downloaded (or reused)
 	err := m.storage.Save()
 	if err != nil {
 		return errors.Wrap(err, m.id)
 	}
 
+	// Phase 3: Atomically switch to new mirror
 	// replace the symlink atomically
 	err = m.replaceLink()
 	if err != nil {
@@ -272,8 +291,22 @@ func (m *Mirror) Update(ctx context.Context) error {
 	return nil
 }
 
-// updateSuite partially updates mirror for a suite.
+// updateSuite processes a single suite (distribution release) for the mirror.
+//
+// For a suite like "noble" or "jammy", this:
+//  1. Downloads Release/InRelease files
+//  2. Verifies PGP signatures (unless disabled)
+//  3. Extracts file metadata (checksums, sizes) from Release
+//  4. Downloads index files (Packages, Sources, Contents)
+//  5. Extracts package file list from indices
+//  6. Downloads package files (with optional filtering)
+//
+// The byhash flag indicates whether the repository supports by-hash retrieval,
+// which allows fetching files by their checksum for better caching.
+//
+// All downloaded files are stored in itemMap for tracking and deduplication.
 func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[string]*apt.FileInfo, quiet bool) error {
+	// Step 1: Download and verify Release files
 	slog.Info("downloading Release/InRelease files", "repo", m.id, "suite", suite)
 	slog.Debug("processing suite", "repo", m.id, "suite", suite, "sections", m.mc.Sections, "architectures", m.mc.Architectures)
 	indexMap, byhash, err := m.parser.downloadRelease(ctx, m.httpClient, suite, m)
@@ -287,6 +320,7 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 
 	slog.Debug("release files parsed", "repo", m.id, "suite", suite, "by_hash", byhash, "index_files", len(indexMap))
 
+	// Step 2: Filter out Sources files if not needed
 	// WORKAROUND: some (zabbix) repositories returns wrong contents
 	// for non-existent files such as Sources (looks like the body of
 	// Sources.gz is returned).
@@ -303,6 +337,7 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 		indexMap = tmpMap
 	}
 
+	// Step 3: Download index files (Packages, Sources, etc.)
 	// download (or reuse) all indices
 	slog.Info("downloading package/source index files)", "repo", m.id, "suite", suite, "total", len(indexMap))
 	indices, err := m.parser.downloadIndices(ctx, m.httpClient, indexMap, byhash, m)
@@ -311,6 +346,7 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 	}
 	slog.Debug("index files processed", "repo", m.id, "suite", suite, "downloaded", len(indices))
 
+	// Step 4: Extract package file list and download packages
 	// extract file information from indices and download items
 	slog.Info("processing package files", "repo", m.id, "suite", suite)
 	items, err := m.parser.downloadItems(ctx, m.httpClient, indices, byhash, quiet, m, suite)
@@ -319,7 +355,7 @@ func (m *Mirror) updateSuite(ctx context.Context, suite string, itemMap map[stri
 	}
 	slog.Debug("package files processed", "repo", m.id, "suite", suite, "total", len(items))
 
-	// Add items to the item map
+	// Add items to the item map for tracking
 	for _, item := range items {
 		itemMap[item.Path()] = item
 	}
