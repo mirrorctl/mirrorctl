@@ -128,6 +128,41 @@ func parseChecksum(l string) (p string, size uint64, csum []byte, err error) {
 	return
 }
 
+// checksumType represents a type of checksum used in Release files
+type checksumType struct {
+	name   string                  // Name for error messages (e.g., "MD5Sum")
+	setter func(*FileInfo, []byte) // Function to set checksum on FileInfo
+}
+
+// processChecksumLines parses checksum lines and populates FileInfo entries in the map.
+// This consolidates the repetitive logic for MD5Sum, SHA1, SHA256, and SHA512 fields.
+func processChecksumLines(lines []string, dir string, fileMap map[string]*FileInfo, csumType checksumType) error {
+	for _, line := range lines {
+		filePath, size, checksum, err := parseChecksum(line)
+		if err != nil {
+			return errors.Wrap(err, "parseChecksum for "+csumType.name)
+		}
+
+		// Join with directory and clean the path
+		filePath = path.Join(dir, path.Clean(filePath))
+
+		// Get or create FileInfo entry
+		fileInfo, exists := fileMap[filePath]
+		if !exists {
+			fileInfo = &FileInfo{
+				path: filePath,
+				size: size,
+			}
+			fileMap[filePath] = fileInfo
+		}
+
+		// Set the appropriate checksum field
+		csumType.setter(fileInfo, checksum)
+	}
+
+	return nil
+}
+
 // getFilesFromRelease parses Release or InRelease file and
 // returns a list of *FileInfo pointed in the file.
 func getFilesFromRelease(p string, r io.Reader) ([]*FileInfo, Paragraph, error) {
@@ -149,78 +184,47 @@ func getFilesFromRelease(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 
 	m := make(map[string]*FileInfo)
 
-	for _, l := range md5sums {
-		p, size, csum, err := parseChecksum(l)
-		p = path.Join(dir, path.Clean(p))
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "parseChecksum for md5sums")
-		}
-
-		fi := &FileInfo{
-			path:   p,
-			size:   size,
-			md5sum: csum,
-		}
-		m[p] = fi
+	// Define checksum types with their corresponding setter functions
+	checksumTypes := []struct {
+		lines []string
+		ctype checksumType
+	}{
+		{
+			lines: md5sums,
+			ctype: checksumType{
+				name:   "MD5Sum",
+				setter: func(fi *FileInfo, csum []byte) { fi.md5sum = csum },
+			},
+		},
+		{
+			lines: sha1sums,
+			ctype: checksumType{
+				name:   "SHA1",
+				setter: func(fi *FileInfo, csum []byte) { fi.sha1sum = csum },
+			},
+		},
+		{
+			lines: sha256sums,
+			ctype: checksumType{
+				name:   "SHA256",
+				setter: func(fi *FileInfo, csum []byte) { fi.sha256sum = csum },
+			},
+		},
+		{
+			lines: sha512sums,
+			ctype: checksumType{
+				name:   "SHA512",
+				setter: func(fi *FileInfo, csum []byte) { fi.sha512sum = csum },
+			},
+		},
 	}
 
-	for _, l := range sha1sums {
-		p, size, csum, err := parseChecksum(l)
-		p = path.Join(dir, path.Clean(p))
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "parseChecksum for sha1sums")
-		}
-
-		fi, ok := m[p]
-		if ok {
-			fi.sha1sum = csum
-		} else {
-			fi := &FileInfo{
-				path:    p,
-				size:    size,
-				sha1sum: csum,
+	// Process each checksum type using the consolidated helper function
+	for _, ct := range checksumTypes {
+		if len(ct.lines) > 0 {
+			if err := processChecksumLines(ct.lines, dir, m, ct.ctype); err != nil {
+				return nil, nil, err
 			}
-			m[p] = fi
-		}
-	}
-
-	for _, l := range sha256sums {
-		p, size, csum, err := parseChecksum(l)
-		p = path.Join(dir, path.Clean(p))
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "parseChecksum for sha256sums")
-		}
-
-		fi, ok := m[p]
-		if ok {
-			fi.sha256sum = csum
-		} else {
-			fi := &FileInfo{
-				path:      p,
-				size:      size,
-				sha256sum: csum,
-			}
-			m[p] = fi
-		}
-	}
-
-	for _, l := range sha512sums {
-		p, size, csum, err := parseChecksum(l)
-		p = path.Join(dir, path.Clean(p))
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "parseChecksum for sha512sums")
-		}
-
-		fi, ok := m[p]
-		if ok {
-			fi.sha512sum = csum
-		} else {
-			fi := &FileInfo{
-				path:      p,
-				size:      size,
-				sha512sum: csum,
-			}
-			m[p] = fi
 		}
 	}
 
