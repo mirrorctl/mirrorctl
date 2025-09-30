@@ -203,16 +203,47 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(syncCmd)
-	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(checkCmd)
-	rootCmd.AddCommand(snapshotCmd)
+	setupPersistentFlags()
+	registerCommands()
+}
 
-	// Add check subcommands
+// setupPersistentFlags configures global flags available to all commands
+func setupPersistentFlags() {
+	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", defaultConfigPath, "configuration file path")
+	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "", "override log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().BoolP("help", "h", false, "help for mirrorctl")
+	rootCmd.PersistentFlags().Bool("no-pgp-check", false, "disable PGP signature verification")
+	rootCmd.PersistentFlags().Bool("verbose-errors", false, "show detailed error information including stack traces")
+	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "suppress all output except for errors")
+	rootCmd.PersistentFlags().Bool("dry-run", false, "calculate disk usage without downloading files")
+
+	rootCmd.Flags().BoolP("version", "v", false, "print version information and exit")
+}
+
+// registerCommands registers all subcommands with the root command
+func registerCommands() {
+	rootCmd.AddCommand(versionCmd)
+	registerSyncCommand()
+	registerCheckCommands()
+	registerSnapshotCommands()
+}
+
+// registerSyncCommand configures the sync command and its flags
+func registerSyncCommand() {
+	syncCmd.Flags().Bool("force", false, "overwrite snapshot if it already exists")
+	rootCmd.AddCommand(syncCmd)
+}
+
+// registerCheckCommands configures the check command and its subcommands
+func registerCheckCommands() {
 	checkCmd.AddCommand(checkConfigCmd)
 	checkCmd.AddCommand(checkTLSCmd)
+	rootCmd.AddCommand(checkCmd)
+}
 
-	// Add snapshot subcommands
+// registerSnapshotCommands configures the snapshot command and its subcommands
+func registerSnapshotCommands() {
+	// Add subcommands
 	snapshotCmd.AddCommand(snapshotCreateCmd)
 	snapshotCmd.AddCommand(snapshotListCmd)
 	snapshotCmd.AddCommand(snapshotPublishCmd)
@@ -221,27 +252,15 @@ func init() {
 	snapshotCmd.AddCommand(snapshotDeleteCmd)
 	snapshotCmd.AddCommand(snapshotPruneCmd)
 
-	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", defaultConfigPath, "configuration file path")
-	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "", "override log level (debug, info, warn, error)")
-
-	rootCmd.Flags().BoolP("version", "v", false, "print version information and exit")
-
-	rootCmd.PersistentFlags().BoolP("help", "h", false, "help for mirrorctl")
-	rootCmd.PersistentFlags().Bool("no-pgp-check", false, "disable PGP signature verification")
-	rootCmd.PersistentFlags().Bool("verbose-errors", false, "show detailed error information including stack traces")
-	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "suppress all output except for errors")
-	rootCmd.PersistentFlags().Bool("dry-run", false, "calculate disk usage without downloading files")
-
-	// Add the --force flag specifically to the sync command
-	syncCmd.Flags().Bool("force", false, "overwrite snapshot if it already exists")
-
-	// Add snapshot-specific flags
+	// Configure flags for snapshot subcommands
 	snapshotCreateCmd.Flags().Bool("force", false, "overwrite existing snapshot with same name")
 	snapshotCreateCmd.Flags().Bool("stage", false, "publish to staging after creation")
 	snapshotListCmd.Flags().Bool("detailed", false, "show detailed snapshot information including size and status")
 	snapshotDeleteCmd.Flags().Bool("force", false, "delete even if snapshot is currently published or staged")
 	snapshotPruneCmd.Flags().Int("keep-last", 0, "number of recent snapshots to keep")
 	snapshotPruneCmd.Flags().String("keep-within", "", "keep snapshots within duration (e.g., \"30d\", \"1w\")")
+
+	rootCmd.AddCommand(snapshotCmd)
 }
 
 // formatError returns a human-friendly error message, optionally with stack trace
@@ -330,38 +349,16 @@ func runMirror(cmd *cobra.Command, args []string) {
 	}
 
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
-
-	config, err := loadConfig(verboseErrors)
-	if err != nil {
-		if !verboseErrors {
-			slog.Info("run with --verbose-errors for detailed stack traces")
-		}
-		os.Exit(1)
-	}
-
-	// Apply log configuration immediately after config loading
-	if err := config.Log.Apply(); err != nil {
-		slog.Error("failed to apply log config", "error", err)
-		os.Exit(1)
-	}
-
-	// Override log level if specified on command line
-	if logLevel != "" {
-		config.Log.Level = logLevel
-		if err := config.Log.Apply(); err != nil {
-			slog.Error("failed to apply command-line log level", "level", logLevel, "error", err)
-			os.Exit(1)
-		}
-		slog.Debug("log level successfully overridden from command line", "level", logLevel)
-	}
-
 	quiet, _ := cmd.Flags().GetBool("quiet")
-	if quiet {
-		config.Log.Level = "error"
-		if err := config.Log.Apply(); err != nil {
-			slog.Error("failed to apply quiet log level", "error", err)
-			os.Exit(1)
-		}
+
+	config, err := loadAndApplyConfig(ConfigOptions{
+		VerboseErrors: verboseErrors,
+		ApplyLogging:  true,
+		Quiet:         quiet,
+	})
+	if err != nil {
+		slog.Error("failed to load configuration", "error", err)
+		os.Exit(1)
 	}
 
 	noPGPCheck, _ := cmd.Flags().GetBool("no-pgp-check")
@@ -383,7 +380,11 @@ func runMirror(cmd *cobra.Command, args []string) {
 func runValidate(cmd *cobra.Command, _ []string) {
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 
-	config, err := loadConfig(verboseErrors)
+	config, err := loadAndApplyConfig(ConfigOptions{
+		VerboseErrors: verboseErrors,
+		ApplyLogging:  false, // Don't apply logging for validation
+		Quiet:         false,
+	})
 	if err != nil {
 		os.Exit(1)
 	}
@@ -422,7 +423,11 @@ func runTLSCheck(_ *cobra.Command, args []string) {
 	mirrorID := args[0]
 
 	// Load configuration file
-	config, err := loadConfig(false) // Use verboseErrors=false for TLS check
+	config, err := loadAndApplyConfig(ConfigOptions{
+		VerboseErrors: false,
+		ApplyLogging:  false, // Don't apply logging for TLS check
+		Quiet:         false,
+	})
 	if err != nil {
 		os.Exit(1)
 	}
@@ -556,27 +561,61 @@ func tlsVersionString(version uint16) string {
 	}
 }
 
-// loadConfigForSnapshot is a helper function to load configuration for snapshot commands
-func loadConfigForSnapshot(_ bool) (*mirror.Config, error) {
-	config, err := loadConfig(false) // Use verboseErrors=false for snapshot commands
+// ConfigOptions holds configuration loading options
+type ConfigOptions struct {
+	VerboseErrors bool
+	ApplyLogging  bool
+	Quiet         bool
+}
+
+// loadAndApplyConfig loads configuration and optionally applies logging settings.
+// This centralizes the common pattern of loading config, applying log settings,
+// and overriding log level from command-line flags.
+func loadAndApplyConfig(opts ConfigOptions) (*mirror.Config, error) {
+	config, err := loadConfig(opts.VerboseErrors)
 	if err != nil {
+		if !opts.VerboseErrors {
+			slog.Info("run with --verbose-errors for detailed stack traces")
+		}
 		return nil, err
+	}
+
+	if !opts.ApplyLogging {
+		return config, nil
 	}
 
 	// Apply log configuration
 	if err := config.Log.Apply(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to apply log config: %w", err)
 	}
 
 	// Override log level if specified on command line
 	if logLevel != "" {
 		config.Log.Level = logLevel
 		if err := config.Log.Apply(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to apply command-line log level %s: %w", logLevel, err)
+		}
+		slog.Debug("log level successfully overridden from command line", "level", logLevel)
+	}
+
+	// Apply quiet mode if requested
+	if opts.Quiet {
+		config.Log.Level = "error"
+		if err := config.Log.Apply(); err != nil {
+			return nil, fmt.Errorf("failed to apply quiet log level: %w", err)
 		}
 	}
 
 	return config, nil
+}
+
+// loadConfigForSnapshot is a helper function to load configuration for snapshot commands
+func loadConfigForSnapshot(_ bool) (*mirror.Config, error) {
+	return loadAndApplyConfig(ConfigOptions{
+		VerboseErrors: false,
+		ApplyLogging:  true,
+		Quiet:         false,
+	})
 }
 
 func runSnapshotCreate(cmd *cobra.Command, args []string) {
