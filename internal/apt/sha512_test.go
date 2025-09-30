@@ -39,7 +39,7 @@ SHA512:
 		if fi1.Size() != 1024 {
 			t.Errorf("Expected size 1024, got %d", fi1.Size())
 		}
-		if len(fi1.sha512sum) == 0 {
+		if len(fi1.checksums.SHA512) == 0 {
 			t.Error("Expected SHA512 checksum to be present")
 		}
 
@@ -58,7 +58,7 @@ SHA512:
 		if fi2.Size() != 512 {
 			t.Errorf("Expected size 512, got %d", fi2.Size())
 		}
-		if len(fi2.sha512sum) == 0 {
+		if len(fi2.checksums.SHA512) == 0 {
 			t.Error("Expected SHA512 checksum to be present")
 		}
 	}
@@ -93,7 +93,7 @@ SHA512: ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8
 	if fi.Size() != 2048 {
 		t.Errorf("Expected size 2048, got %d", fi.Size())
 	}
-	if len(fi.sha512sum) == 0 {
+	if len(fi.checksums.SHA512) == 0 {
 		t.Error("Expected SHA512 checksum to be present")
 	}
 
@@ -107,9 +107,11 @@ SHA512: ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8
 func TestSHA512JSON(t *testing.T) {
 	// Test JSON marshaling/unmarshaling with SHA512
 	fi := &FileInfo{
-		path:      "test/file.deb",
-		size:      1024,
-		sha512sum: []byte{0xee, 0x26, 0xb0, 0xdd, 0x4a, 0xf7, 0xe7, 0x49},
+		path: "test/file.deb",
+		size: 1024,
+		checksums: Checksums{
+			SHA512: []byte{0xee, 0x26, 0xb0, 0xdd, 0x4a, 0xf7, 0xe7, 0x49},
+		},
 	}
 
 	data, err := fi.MarshalJSON()

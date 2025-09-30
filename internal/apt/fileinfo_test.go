@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"strings"
@@ -18,17 +19,21 @@ func testFileInfoSame(t *testing.T) {
 	md5sum := md5.Sum(data)
 	sha1sum := sha1.Sum(data)
 	sha256sum := sha256.Sum256(data)
+	sha512sum := sha512.Sum512(data)
 
 	data2 := []byte{'1', '2', '3'}
 	md5sum2 := md5.Sum(data2)
 	sha1sum2 := sha1.Sum(data2)
 
 	fi := &FileInfo{
-		path:      "/data",
-		size:      uint64(len(data)),
-		md5sum:    md5sum[:],
-		sha1sum:   sha1sum[:],
-		sha256sum: sha256sum[:],
+		path: "/data",
+		size: uint64(len(data)),
+		checksums: Checksums{
+			MD5:    md5sum[:],
+			SHA1:   sha1sum[:],
+			SHA256: sha256sum[:],
+			SHA512: sha512sum[:],
+		},
 	}
 
 	if fi.Path() != "/data" {
@@ -60,59 +65,72 @@ func testFileInfoSame(t *testing.T) {
 	}
 
 	md5mismatch := &FileInfo{
-		path:   "/data",
-		size:   uint64(len(data)),
-		md5sum: md5sum2[:],
+		path: "/data",
+		size: uint64(len(data)),
+		checksums: Checksums{
+			MD5: md5sum2[:],
+		},
 	}
 	if md5mismatch.Same(fi) {
 		t.Error(`md5mismatch.Same(fi)`)
 	}
 
 	md5match := &FileInfo{
-		path:   "/data",
-		size:   uint64(len(data)),
-		md5sum: md5sum[:],
+		path: "/data",
+		size: uint64(len(data)),
+		checksums: Checksums{
+			MD5: md5sum[:],
+		},
 	}
 	if !md5match.Same(fi) {
 		t.Error(`!md5match.Same(fi)`)
 	}
 
 	sha1mismatch := &FileInfo{
-		path:    "/data",
-		size:    uint64(len(data)),
-		md5sum:  md5sum[:],
-		sha1sum: sha1sum2[:],
+		path: "/data",
+		size: uint64(len(data)),
+		checksums: Checksums{
+			MD5:  md5sum[:],
+			SHA1: sha1sum2[:],
+		},
 	}
 	if sha1mismatch.Same(fi) {
 		t.Error(`sha1mismatch.Same(fi)`)
 	}
 
 	sha1match := &FileInfo{
-		path:    "/data",
-		size:    uint64(len(data)),
-		md5sum:  md5sum[:],
-		sha1sum: sha1sum[:],
+		path: "/data",
+		size: uint64(len(data)),
+		checksums: Checksums{
+			MD5:  md5sum[:],
+			SHA1: sha1sum[:],
+		},
 	}
 	if !sha1match.Same(fi) {
 		t.Error(`!sha1match.Same(fi)`)
 	}
 
 	sha1matchmd5mismatch := &FileInfo{
-		path:    "/data",
-		size:    uint64(len(data)),
-		md5sum:  md5sum2[:],
-		sha1sum: sha1sum[:],
+		path: "/data",
+		size: uint64(len(data)),
+		checksums: Checksums{
+			MD5:  md5sum2[:],
+			SHA1: sha1sum[:],
+		},
 	}
 	if sha1matchmd5mismatch.Same(fi) {
 		t.Error(`sha1matchmd5mismatch.Same(fi)`)
 	}
 
 	allmatch := &FileInfo{
-		path:      "/data",
-		size:      uint64(len(data)),
-		md5sum:    md5sum[:],
-		sha1sum:   sha1sum[:],
-		sha256sum: sha256sum[:],
+		path: "/data",
+		size: uint64(len(data)),
+		checksums: Checksums{
+			MD5:    md5sum[:],
+			SHA1:   sha1sum[:],
+			SHA256: sha256sum[:],
+			SHA512: sha512sum[:],
+		},
 	}
 	if !allmatch.Same(fi) {
 		t.Error(`!allmatch.Same(fi)`)
@@ -212,11 +230,13 @@ func testFileInfoCopy(t *testing.T) {
 	sha256sum := sha256.Sum256([]byte(text))
 
 	fi := &FileInfo{
-		path:      p,
-		size:      uint64(r.Size()),
-		md5sum:    md5sum[:],
-		sha1sum:   sha1sum[:],
-		sha256sum: sha256sum[:],
+		path: p,
+		size: uint64(r.Size()),
+		checksums: Checksums{
+			MD5:    md5sum[:],
+			SHA1:   sha1sum[:],
+			SHA256: sha256sum[:],
+		},
 	}
 
 	fi2, err := CopyWithFileInfo(w, r, p)

@@ -15,14 +15,20 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+// Checksums holds all checksum values for a file.
+// A nil value for any checksum means it's not available or not required.
+type Checksums struct {
+	MD5    []byte // nil means no MD5 checksum to be checked
+	SHA1   []byte // nil means no SHA1 checksum to be checked
+	SHA256 []byte // nil means no SHA256 checksum to be checked
+	SHA512 []byte // nil means no SHA512 checksum to be checked
+}
+
 // FileInfo is a set of meta data of a file.
 type FileInfo struct {
 	path      string
 	size      uint64
-	md5sum    []byte // nil means no MD5 checksum to be checked.
-	sha1sum   []byte // nil means no SHA1 ...
-	sha256sum []byte // nil means no SHA256 ...
-	sha512sum []byte // nil means no SHA512 ...
+	checksums Checksums
 }
 
 // Same returns true if t has the same checksum values.
@@ -36,16 +42,16 @@ func (fi *FileInfo) Same(t *FileInfo) bool {
 	if fi.size != t.size {
 		return false
 	}
-	if fi.md5sum != nil && !bytes.Equal(fi.md5sum, t.md5sum) {
+	if fi.checksums.MD5 != nil && !bytes.Equal(fi.checksums.MD5, t.checksums.MD5) {
 		return false
 	}
-	if fi.sha1sum != nil && !bytes.Equal(fi.sha1sum, t.sha1sum) {
+	if fi.checksums.SHA1 != nil && !bytes.Equal(fi.checksums.SHA1, t.checksums.SHA1) {
 		return false
 	}
-	if fi.sha256sum != nil && !bytes.Equal(fi.sha256sum, t.sha256sum) {
+	if fi.checksums.SHA256 != nil && !bytes.Equal(fi.checksums.SHA256, t.checksums.SHA256) {
 		return false
 	}
-	if fi.sha512sum != nil && !bytes.Equal(fi.sha512sum, t.sha512sum) {
+	if fi.checksums.SHA512 != nil && !bytes.Equal(fi.checksums.SHA512, t.checksums.SHA512) {
 		return false
 	}
 	return true
@@ -63,7 +69,7 @@ func (fi *FileInfo) Size() uint64 {
 
 // HasChecksum returns true if fi has checksums.
 func (fi *FileInfo) HasChecksum() bool {
-	return fi.md5sum != nil
+	return fi.checksums.MD5 != nil
 }
 
 // CalcChecksums calculates checksums and stores them in fi.
@@ -73,10 +79,10 @@ func (fi *FileInfo) CalcChecksums(data []byte) {
 	sha256sum := sha256.Sum256(data)
 	sha512sum := sha512.Sum512(data)
 	fi.size = uint64(len(data))
-	fi.md5sum = md5sum[:]
-	fi.sha1sum = sha1sum[:]
-	fi.sha256sum = sha256sum[:]
-	fi.sha512sum = sha512sum[:]
+	fi.checksums.MD5 = md5sum[:]
+	fi.checksums.SHA1 = sha1sum[:]
+	fi.checksums.SHA256 = sha256sum[:]
+	fi.checksums.SHA512 = sha512sum[:]
 }
 
 // AddPrefix creates a new FileInfo by prepending prefix to the path.
@@ -89,49 +95,49 @@ func (fi *FileInfo) AddPrefix(prefix string) *FileInfo {
 // MD5SumPath returns the filepath for "by-hash" with md5 checksum.
 // If fi has no checksum, an empty string will be returned.
 func (fi *FileInfo) MD5SumPath() string {
-	if fi.md5sum == nil {
+	if fi.checksums.MD5 == nil {
 		return ""
 	}
 	return path.Join(path.Dir(fi.path),
 		"by-hash",
 		"MD5Sum",
-		hex.EncodeToString(fi.md5sum))
+		hex.EncodeToString(fi.checksums.MD5))
 }
 
 // SHA1Path returns the filepath for "by-hash" with sha1 checksum.
 // If fi has no checksum, an empty string will be returned.
 func (fi *FileInfo) SHA1Path() string {
-	if fi.sha1sum == nil {
+	if fi.checksums.SHA1 == nil {
 		return ""
 	}
 	return path.Join(path.Dir(fi.path),
 		"by-hash",
 		"SHA1",
-		hex.EncodeToString(fi.sha1sum))
+		hex.EncodeToString(fi.checksums.SHA1))
 }
 
 // SHA256Path returns the filepath for "by-hash" with sha256 checksum.
 // If fi has no checksum, an empty string will be returned.
 func (fi *FileInfo) SHA256Path() string {
-	if fi.sha256sum == nil {
+	if fi.checksums.SHA256 == nil {
 		return ""
 	}
 	return path.Join(path.Dir(fi.path),
 		"by-hash",
 		"SHA256",
-		hex.EncodeToString(fi.sha256sum))
+		hex.EncodeToString(fi.checksums.SHA256))
 }
 
 // SHA512Path returns the filepath for "by-hash" with sha512 checksum.
 // If fi has no checksum, an empty string will be returned.
 func (fi *FileInfo) SHA512Path() string {
-	if fi.sha512sum == nil {
+	if fi.checksums.SHA512 == nil {
 		return ""
 	}
 	return path.Join(path.Dir(fi.path),
 		"by-hash",
 		"SHA512",
-		hex.EncodeToString(fi.sha512sum))
+		hex.EncodeToString(fi.checksums.SHA512))
 }
 
 type fileInfoJSON struct {
@@ -151,17 +157,17 @@ func (fi *FileInfo) MarshalJSON() ([]byte, error) {
 		return nil, errors.Newf("file size %d exceeds maximum int64 value", fi.size)
 	}
 	fij.Size = int64(fi.size)
-	if fi.md5sum != nil {
-		fij.MD5Sum = hex.EncodeToString(fi.md5sum)
+	if fi.checksums.MD5 != nil {
+		fij.MD5Sum = hex.EncodeToString(fi.checksums.MD5)
 	}
-	if fi.sha1sum != nil {
-		fij.SHA1Sum = hex.EncodeToString(fi.sha1sum)
+	if fi.checksums.SHA1 != nil {
+		fij.SHA1Sum = hex.EncodeToString(fi.checksums.SHA1)
 	}
-	if fi.sha256sum != nil {
-		fij.SHA256Sum = hex.EncodeToString(fi.sha256sum)
+	if fi.checksums.SHA256 != nil {
+		fij.SHA256Sum = hex.EncodeToString(fi.checksums.SHA256)
 	}
-	if fi.sha512sum != nil {
-		fij.SHA512Sum = hex.EncodeToString(fi.sha512sum)
+	if fi.checksums.SHA512 != nil {
+		fij.SHA512Sum = hex.EncodeToString(fi.checksums.SHA512)
 	}
 	return json.Marshal(&fij)
 }
@@ -182,28 +188,28 @@ func (fi *FileInfo) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return errors.Wrap(err, "UnmarshalJSON MD5Sum for "+fij.Path)
 		}
-		fi.md5sum = md5sum
+		fi.checksums.MD5 = md5sum
 	}
 	if fij.SHA1Sum != "" {
 		sha1sum, err := hex.DecodeString(fij.SHA1Sum)
 		if err != nil {
 			return errors.Wrap(err, "UnmarshalJSON SHA1Sum for "+fij.Path)
 		}
-		fi.sha1sum = sha1sum
+		fi.checksums.SHA1 = sha1sum
 	}
 	if fij.SHA256Sum != "" {
 		sha256sum, err := hex.DecodeString(fij.SHA256Sum)
 		if err != nil {
 			return errors.Wrap(err, "UnmarshalJSON SHA256Sum for "+fij.Path)
 		}
-		fi.sha256sum = sha256sum
+		fi.checksums.SHA256 = sha256sum
 	}
 	if fij.SHA512Sum != "" {
 		sha512sum, err := hex.DecodeString(fij.SHA512Sum)
 		if err != nil {
 			return errors.Wrap(err, "UnmarshalJSON SHA512Sum for "+fij.Path)
 		}
-		fi.sha512sum = sha512sum
+		fi.checksums.SHA512 = sha512sum
 	}
 	return nil
 }
@@ -223,12 +229,14 @@ func CopyWithFileInfo(dst io.Writer, src io.Reader, p string) (*FileInfo, error)
 	}
 
 	return &FileInfo{
-		path:      p,
-		size:      uint64(n), // #nosec G115 - io.Copy returns int64, conversion is safe as n >= 0
-		md5sum:    md5hash.Sum(nil),
-		sha1sum:   sha1hash.Sum(nil),
-		sha256sum: sha256hash.Sum(nil),
-		sha512sum: sha512hash.Sum(nil),
+		path: p,
+		size: uint64(n), // #nosec G115 - io.Copy returns int64, conversion is safe as n >= 0
+		checksums: Checksums{
+			MD5:    md5hash.Sum(nil),
+			SHA1:   sha1hash.Sum(nil),
+			SHA256: sha256hash.Sum(nil),
+			SHA512: sha512hash.Sum(nil),
+		},
 	}, nil
 }
 

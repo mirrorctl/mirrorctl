@@ -130,8 +130,8 @@ func parseChecksum(l string) (p string, size uint64, csum []byte, err error) {
 
 // checksumType represents a type of checksum used in Release files
 type checksumType struct {
-	name   string                  // Name for error messages (e.g., "MD5Sum")
-	setter func(*FileInfo, []byte) // Function to set checksum on FileInfo
+	name   string                   // Name for error messages (e.g., "MD5Sum")
+	setter func(*Checksums, []byte) // Function to set checksum on Checksums struct
 }
 
 // processChecksumLines parses checksum lines and populates FileInfo entries in the map.
@@ -156,8 +156,8 @@ func processChecksumLines(lines []string, dir string, fileMap map[string]*FileIn
 			fileMap[filePath] = fileInfo
 		}
 
-		// Set the appropriate checksum field
-		csumType.setter(fileInfo, checksum)
+		// Set the appropriate checksum field using the Checksums struct
+		csumType.setter(&fileInfo.checksums, checksum)
 	}
 
 	return nil
@@ -193,28 +193,28 @@ func getFilesFromRelease(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 			lines: md5sums,
 			ctype: checksumType{
 				name:   "MD5Sum",
-				setter: func(fi *FileInfo, csum []byte) { fi.md5sum = csum },
+				setter: func(csums *Checksums, csum []byte) { csums.MD5 = csum },
 			},
 		},
 		{
 			lines: sha1sums,
 			ctype: checksumType{
 				name:   "SHA1",
-				setter: func(fi *FileInfo, csum []byte) { fi.sha1sum = csum },
+				setter: func(csums *Checksums, csum []byte) { csums.SHA1 = csum },
 			},
 		},
 		{
 			lines: sha256sums,
 			ctype: checksumType{
 				name:   "SHA256",
-				setter: func(fi *FileInfo, csum []byte) { fi.sha256sum = csum },
+				setter: func(csums *Checksums, csum []byte) { csums.SHA256 = csum },
 			},
 		},
 		{
 			lines: sha512sums,
 			ctype: checksumType{
 				name:   "SHA512",
-				setter: func(fi *FileInfo, csum []byte) { fi.sha512sum = csum },
+				setter: func(csums *Checksums, csum []byte) { csums.SHA512 = csum },
 			},
 		},
 	}
@@ -285,28 +285,28 @@ func getFilesFromPackages(p string, r io.Reader) ([]*FileInfo, Paragraph, error)
 			if err != nil {
 				return nil, nil, err
 			}
-			fi.md5sum = b
+			fi.checksums.MD5 = b
 		}
 		if csum, ok := d["SHA1"]; ok {
 			b, err := hex.DecodeString(csum[0])
 			if err != nil {
 				return nil, nil, err
 			}
-			fi.sha1sum = b
+			fi.checksums.SHA1 = b
 		}
 		if csum, ok := d["SHA256"]; ok {
 			b, err := hex.DecodeString(csum[0])
 			if err != nil {
 				return nil, nil, err
 			}
-			fi.sha256sum = b
+			fi.checksums.SHA256 = b
 		}
 		if csum, ok := d["SHA512"]; ok {
 			b, err := hex.DecodeString(csum[0])
 			if err != nil {
 				return nil, nil, err
 			}
-			fi.sha512sum = b
+			fi.checksums.SHA512 = b
 		}
 		l = append(l, fi)
 	}
@@ -349,9 +349,11 @@ func getFilesFromSources(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 
 			fpath := path.Clean(path.Join(dir[0], fname))
 			m[fpath] = &FileInfo{
-				path:   fpath,
-				size:   size,
-				md5sum: csum,
+				path: fpath,
+				size: size,
+				checksums: Checksums{
+					MD5: csum,
+				},
 			}
 		}
 
@@ -363,12 +365,14 @@ func getFilesFromSources(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 
 			fpath := path.Clean(path.Join(dir[0], fname))
 			if _, ok := m[fpath]; ok {
-				m[fpath].sha1sum = csum
+				m[fpath].checksums.SHA1 = csum
 			} else {
 				m[fpath] = &FileInfo{
-					path:    fpath,
-					size:    size,
-					sha1sum: csum,
+					path: fpath,
+					size: size,
+					checksums: Checksums{
+						SHA1: csum,
+					},
 				}
 			}
 		}
@@ -381,12 +385,14 @@ func getFilesFromSources(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 
 			fpath := path.Clean(path.Join(dir[0], fname))
 			if _, ok := m[fpath]; ok {
-				m[fpath].sha256sum = csum
+				m[fpath].checksums.SHA256 = csum
 			} else {
 				m[fpath] = &FileInfo{
-					path:      fpath,
-					size:      size,
-					sha256sum: csum,
+					path: fpath,
+					size: size,
+					checksums: Checksums{
+						SHA256: csum,
+					},
 				}
 			}
 		}
@@ -399,18 +405,20 @@ func getFilesFromSources(p string, r io.Reader) ([]*FileInfo, Paragraph, error) 
 
 			fpath := path.Clean(path.Join(dir[0], fname))
 			if _, ok := m[fpath]; ok {
-				m[fpath].sha512sum = csum
+				m[fpath].checksums.SHA512 = csum
 			} else {
 				m[fpath] = &FileInfo{
-					path:      fpath,
-					size:      size,
-					sha512sum: csum,
+					path: fpath,
+					size: size,
+					checksums: Checksums{
+						SHA512: csum,
+					},
 				}
 			}
 		}
 
 		for _, fi := range m {
-			if len(fi.md5sum) == 0 && len(fi.sha1sum) == 0 && len(fi.sha256sum) == 0 && len(fi.sha512sum) == 0 {
+			if len(fi.checksums.MD5) == 0 && len(fi.checksums.SHA1) == 0 && len(fi.checksums.SHA256) == 0 && len(fi.checksums.SHA512) == 0 {
 				return nil, nil, errors.New("no checksum in " + fi.path)
 			}
 			l = append(l, fi)
