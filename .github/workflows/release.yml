@@ -41,6 +41,50 @@ jobs:
           # REGISTRY_USERNAME: ${{ github.actor }}
           # REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign release artifacts
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+
+          # Sign archives
+          for archive in dist/*.tar.gz; do
+            if [ -f "$archive" ]; then
+              echo "Signing $archive"
+              cosign sign-blob --key cosign.key --output-signature "${archive}.sig" "$archive"
+            fi
+          done
+
+          # Sign checksums file
+          if [ -f dist/checksums.txt ]; then
+            echo "Signing checksums.txt"
+            cosign sign-blob --key cosign.key --output-signature dist/checksums.txt.sig dist/checksums.txt
+          fi
+
+          # Sign SBOM files
+          for sbom in dist/*.spdx.json dist/*.cyclonedx.json; do
+            if [ -f "$sbom" ]; then
+              echo "Signing $sbom"
+              cosign sign-blob --key cosign.key --output-signature "${sbom}.sig" "$sbom"
+            fi
+          done
+
+          rm cosign.key
+
+      - name: Upload signatures to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for sig in dist/*.sig; do
+            if [ -f "$sig" ]; then
+              echo "Uploading $sig"
+              gh release upload ${{ github.ref_name }} "$sig"
+            fi
+          done
+
   # Optional: Build and test on multiple platforms before release
   test-build:
     name: Test Build
