@@ -36,7 +36,7 @@ jobs:
           version: '~> v2'
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           # Uncomment if you plan to push Docker images to GitHub Container Registry
           # REGISTRY_USERNAME: ${{ github.actor }}
           # REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload signatures to release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           for sig in dist/*.sig; do
             if [ -f "$sig" ]; then
