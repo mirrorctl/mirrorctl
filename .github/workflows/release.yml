@@ -54,21 +54,21 @@ jobs:
           for archive in dist/*.tar.gz; do
             if [ -f "$archive" ]; then
               echo "Signing $archive"
-              cosign sign-blob --key cosign.key --output-signature "${archive}.sig" "$archive"
+              cosign sign-blob --yes --key cosign.key --output-signature "${archive}.sig" "$archive"
             fi
           done
 
           # Sign checksums file
           if [ -f dist/checksums.txt ]; then
             echo "Signing checksums.txt"
-            cosign sign-blob --key cosign.key --output-signature dist/checksums.txt.sig dist/checksums.txt
+            cosign sign-blob --yes --key cosign.key --output-signature dist/checksums.txt.sig dist/checksums.txt
           fi
 
           # Sign SBOM files
           for sbom in dist/*.spdx.json dist/*.cyclonedx.json; do
             if [ -f "$sbom" ]; then
               echo "Signing $sbom"
-              cosign sign-blob --key cosign.key --output-signature "${sbom}.sig" "$sbom"
+              cosign sign-blob --yes --key cosign.key --output-signature "${sbom}.sig" "$sbom"
             fi
           done
 
