@@ -2,7 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.5.0]
+### Changed
+- Change binary name from go-apt-mirror to mirrorctl
+- Overall, a significant refactoring and upgrade. Refactored the core mirroring logic into a more
+  modular and extensible design
+- Updated dependencies and moved to golang standard library options where appropriate (e.g.,
+  'slog').
+- Introduced snapshotting feature
+- Introduced `--dry-run` feature
+- Added PGP key validation feature
+- Added TLS validation feature
+- Introduced a storage abstraction layer, enabling later support for alternate storage backends 
+- Improved HTTP client with features like connection pooling, retries, and better error handling
+- Added concurrency control and file locking to maintain data integrity during mirror operations
+- Updated tests
+- Implemented go-releaser publishing, including sbom creation and artifact signing.
+- Updated documentation (in progress) at mirrorctl.org
+- Removed go-apt-cacher from the application repository.
 
 ## [1.4.2] - 2020-12-23
 ### Changed
