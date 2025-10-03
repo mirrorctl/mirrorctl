@@ -1,11 +1,11 @@
 #!/bin/sh -e
 
 usage() {
-    echo "Usage: build.sh [-v] [mirrorctl]"
+    echo "Usage: build.sh -version VERSION [-v] [mirrorctl]"
     echo
     echo "Builds the mirrorctl binary for Debian repository mirroring."
-    echo "If no target is specified, defaults to mirrorctl."
-    echo "  -v    verbose output"
+    echo "  -version VER    specify version (required)"
+    echo "  -v              verbose output"
     echo
     echo "Note: For release builds with cross-compilation, use GoReleaser:"
     echo "  goreleaser build --snapshot --clean"
@@ -15,36 +15,47 @@ usage() {
 }
 
 VERBOSE=""
-if [ "$1" = "-v" ]; then
-    VERBOSE="-v"
-    shift
-fi
+VERSION=""
 
-VERSION="v1.4.9"
-GIT_COMMIT=$(git rev-parse --short HEAD)
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -v)
+            VERBOSE="-v"
+            shift
+            ;;
+        -version)
+            if [ -z "$2" ]; then
+                echo "Error: -version requires an argument"
+                exit 1
+            fi
+            VERSION="$2"
+            shift 2
+            ;;
+        -*)
+            echo "Error: Unknown option $1"
+            usage
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+GIT_COMMIT=$(git rev-parse --short HEAD)
+TARGET="mirrorctl"
 
 # sanity check -------
+
+if [ -z "$VERSION" ]; then
+    echo "Error: -version is required"
+    usage
+fi
 
 if [ $# -gt 1 ]; then
     usage
 fi
 
-if [ $# -eq 1 ]; then
-    if [ "$1" != "mirrorctl" ]; then
-        if [ "$1" = "go-apt-cacher" ]; then
-            echo "Error: go-apt-cacher has been removed from this application."
-            echo "This application now focuses exclusively on repository mirroring."
-            echo "Use 'mirrorctl' or run without arguments."
-            echo
-            exit 1
-        fi
-        usage
-    fi
-    TARGET="$1"
-else
-    TARGET="mirrorctl"
-fi
 XC_OS="${XC_OS:-$(go env GOOS)}"
 XC_ARCH="${XC_ARCH:-$(go env GOARCH)}"
 
