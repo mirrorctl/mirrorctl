@@ -58,18 +58,6 @@ archives:
 
 
 sboms:
-  - # Generate SPDX SBOM for the project source.
-    id: project-spdx
-    artifacts: project
-    documents:
-      - "{{ .ProjectName }}_project.spdx.json"
-
-  - # Generate CycloneDX SBOM for the project source.
-    id: project-cyclonedx
-    artifacts: project
-    documents:
-      - "{{ .ProjectName }}_project.cyclonedx.json"
-
   - # Generate SPDX SBOM for each release archive.
     id: archive-spdx
     artifacts: archive
@@ -146,7 +134,6 @@ release:
     All binaries are checksummed for integrity verification. See `checksums.txt` for SHA256 hashes.
 
     Software Bill of Materials (SBOM) files are included for supply chain security:
-    - `mirrorctl_project.spdx.json` / `mirrorctl_project.cyclonedx.json` - Project SBOM
     - `mirrorctl_*_*.spdx.json` / `mirrorctl_*_*.cyclonedx.json` - Binary SBOMs
 
 # Homebrew tap (optional - uncomment if you want to publish to Homebrew)
