@@ -618,7 +618,11 @@ func loadConfigForSnapshot(_ bool) (*mirror.Config, error) {
 	})
 }
 
-func runSnapshotCreate(cmd *cobra.Command, args []string) {
+// setupSnapshotCommand handles common setup for all snapshot commands.
+// It loads the configuration, validates snapshot configuration exists,
+// and creates a snapshot manager. Returns the config, snapshot manager,
+// and verbose errors flag.
+func setupSnapshotCommand(cmd *cobra.Command) (*mirror.Config, *mirror.SnapshotManager, bool) {
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 	config, err := loadConfigForSnapshot(verboseErrors)
 	if err != nil {
@@ -631,22 +635,33 @@ func runSnapshotCreate(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	sm := mirror.NewSnapshotManager(config.Snapshot, config.Dir)
+	return config, sm, verboseErrors
+}
+
+// validateMirrorExists checks if a mirror exists in the configuration
+// and exits with an error if it doesn't.
+func validateMirrorExists(config *mirror.Config, mirrorID string) {
+	if _, ok := config.Mirrors[mirrorID]; !ok {
+		slog.Error("mirror not found in configuration", "mirror", mirrorID)
+		os.Exit(1)
+	}
+}
+
+func runSnapshotCreate(cmd *cobra.Command, args []string) {
+	config, sm, verboseErrors := setupSnapshotCommand(cmd)
+
 	mirrorID := args[0]
 	var snapshotName string
 	if len(args) > 1 {
 		snapshotName = args[1]
 	}
 
-	mirrorConfig, ok := config.Mirrors[mirrorID]
-	if !ok {
-		slog.Error("mirror not found in configuration", "mirror", mirrorID)
-		os.Exit(1)
-	}
+	validateMirrorExists(config, mirrorID)
+	mirrorConfig := config.Mirrors[mirrorID]
 
 	force, _ := cmd.Flags().GetBool("force")
 	stage, _ := cmd.Flags().GetBool("stage")
-
-	sm := mirror.NewSnapshotManager(config.Snapshot, config.Dir)
 
 	if snapshotName == "" {
 		snapshotName = sm.GenerateSnapshotNameForMirror(mirrorConfig.Snapshot)
@@ -672,20 +687,9 @@ func runSnapshotCreate(cmd *cobra.Command, args []string) {
 }
 
 func runSnapshotList(cmd *cobra.Command, args []string) {
-	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
-	config, err := loadConfigForSnapshot(verboseErrors)
-	if err != nil {
-		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
-	}
-
-	if config.Snapshot == nil {
-		slog.Error("snapshot configuration is required for snapshot commands")
-		os.Exit(1)
-	}
+	config, sm, verboseErrors := setupSnapshotCommand(cmd)
 
 	detailed, _ := cmd.Flags().GetBool("detailed")
-	sm := mirror.NewSnapshotManager(config.Snapshot, config.Dir)
 
 	// If no mirrors specified, list all configured mirrors
 	mirrors := args
@@ -727,27 +731,12 @@ func runSnapshotList(cmd *cobra.Command, args []string) {
 }
 
 func runSnapshotPublish(cmd *cobra.Command, args []string) {
-	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
-	config, err := loadConfigForSnapshot(verboseErrors)
-	if err != nil {
-		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
-	}
-
-	if config.Snapshot == nil {
-		slog.Error("snapshot configuration is required for snapshot commands")
-		os.Exit(1)
-	}
+	config, sm, verboseErrors := setupSnapshotCommand(cmd)
 
 	mirrorID := args[0]
 	snapshotName := args[1]
 
-	if _, ok := config.Mirrors[mirrorID]; !ok {
-		slog.Error("mirror not found in configuration", "mirror", mirrorID)
-		os.Exit(1)
-	}
-
-	sm := mirror.NewSnapshotManager(config.Snapshot, config.Dir)
+	validateMirrorExists(config, mirrorID)
 
 	if err := sm.PublishSnapshot(mirrorID, snapshotName); err != nil {
 		errorMsg := formatError(err, verboseErrors)
@@ -759,27 +748,12 @@ func runSnapshotPublish(cmd *cobra.Command, args []string) {
 }
 
 func runSnapshotStage(cmd *cobra.Command, args []string) {
-	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
-	config, err := loadConfigForSnapshot(verboseErrors)
-	if err != nil {
-		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
-	}
-
-	if config.Snapshot == nil {
-		slog.Error("snapshot configuration is required for snapshot commands")
-		os.Exit(1)
-	}
+	config, sm, verboseErrors := setupSnapshotCommand(cmd)
 
 	mirrorID := args[0]
 	snapshotName := args[1]
 
-	if _, ok := config.Mirrors[mirrorID]; !ok {
-		slog.Error("mirror not found in configuration", "mirror", mirrorID)
-		os.Exit(1)
-	}
-
-	sm := mirror.NewSnapshotManager(config.Snapshot, config.Dir)
+	validateMirrorExists(config, mirrorID)
 
 	if err := sm.PublishSnapshotToStaging(mirrorID, snapshotName); err != nil {
 		errorMsg := formatError(err, verboseErrors)
@@ -791,26 +765,11 @@ func runSnapshotStage(cmd *cobra.Command, args []string) {
 }
 
 func runSnapshotPromote(cmd *cobra.Command, args []string) {
-	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
-	config, err := loadConfigForSnapshot(verboseErrors)
-	if err != nil {
-		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
-	}
-
-	if config.Snapshot == nil {
-		slog.Error("snapshot configuration is required for snapshot commands")
-		os.Exit(1)
-	}
+	config, sm, verboseErrors := setupSnapshotCommand(cmd)
 
 	mirrorID := args[0]
 
-	if _, ok := config.Mirrors[mirrorID]; !ok {
-		slog.Error("mirror not found in configuration", "mirror", mirrorID)
-		os.Exit(1)
-	}
-
-	sm := mirror.NewSnapshotManager(config.Snapshot, config.Dir)
+	validateMirrorExists(config, mirrorID)
 
 	promotedSnapshot, err := sm.PromoteSnapshot(mirrorID)
 	if err != nil {
@@ -823,28 +782,14 @@ func runSnapshotPromote(cmd *cobra.Command, args []string) {
 }
 
 func runSnapshotDelete(cmd *cobra.Command, args []string) {
-	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
-	config, err := loadConfigForSnapshot(verboseErrors)
-	if err != nil {
-		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
-	}
-
-	if config.Snapshot == nil {
-		slog.Error("snapshot configuration is required for snapshot commands")
-		os.Exit(1)
-	}
+	config, sm, verboseErrors := setupSnapshotCommand(cmd)
 
 	mirrorID := args[0]
 	snapshotNames := args[1:]
 
-	if _, ok := config.Mirrors[mirrorID]; !ok {
-		slog.Error("mirror not found in configuration", "mirror", mirrorID)
-		os.Exit(1)
-	}
+	validateMirrorExists(config, mirrorID)
 
 	force, _ := cmd.Flags().GetBool("force")
-	sm := mirror.NewSnapshotManager(config.Snapshot, config.Dir)
 
 	for _, snapshotName := range snapshotNames {
 		if err := sm.DeleteSnapshot(mirrorID, snapshotName, force); err != nil {
@@ -857,23 +802,11 @@ func runSnapshotDelete(cmd *cobra.Command, args []string) {
 }
 
 func runSnapshotPrune(cmd *cobra.Command, args []string) {
-	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
-	config, err := loadConfigForSnapshot(verboseErrors)
-	if err != nil {
-		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
-	}
-
-	if config.Snapshot == nil {
-		slog.Error("snapshot configuration is required for snapshot commands")
-		os.Exit(1)
-	}
+	config, sm, verboseErrors := setupSnapshotCommand(cmd)
 
 	keepLast, _ := cmd.Flags().GetInt("keep-last")
 	keepWithin, _ := cmd.Flags().GetString("keep-within")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
-
-	sm := mirror.NewSnapshotManager(config.Snapshot, config.Dir)
 
 	// If no mirrors specified, prune all configured mirrors
 	mirrors := args
