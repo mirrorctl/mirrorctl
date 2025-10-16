@@ -648,6 +648,17 @@ func validateMirrorExists(config *mirror.Config, mirrorID string) {
 	}
 }
 
+// validateMirrorExistsNonFatal checks if a mirror exists in the configuration
+// and logs an error if it doesn't, returning false. Returns true if mirror exists.
+// This is useful in loops where you want to continue processing other items.
+func validateMirrorExistsNonFatal(config *mirror.Config, mirrorID string) bool {
+	if _, ok := config.Mirrors[mirrorID]; !ok {
+		slog.Error("mirror not found in configuration", "mirror", mirrorID)
+		return false
+	}
+	return true
+}
+
 func runSnapshotCreate(cmd *cobra.Command, args []string) {
 	config, sm, verboseErrors := setupSnapshotCommand(cmd)
 
@@ -701,8 +712,7 @@ func runSnapshotList(cmd *cobra.Command, args []string) {
 	}
 
 	for _, mirrorID := range mirrors {
-		if _, ok := config.Mirrors[mirrorID]; !ok {
-			slog.Error("mirror not found in configuration", "mirror", mirrorID)
+		if !validateMirrorExistsNonFatal(config, mirrorID) {
 			continue
 		}
 
@@ -818,11 +828,10 @@ func runSnapshotPrune(cmd *cobra.Command, args []string) {
 	}
 
 	for _, mirrorID := range mirrors {
-		mirrorConfig, ok := config.Mirrors[mirrorID]
-		if !ok {
-			slog.Error("mirror not found in configuration", "mirror", mirrorID)
+		if !validateMirrorExistsNonFatal(config, mirrorID) {
 			continue
 		}
+		mirrorConfig := config.Mirrors[mirrorID]
 
 		var keepLastPtr *int
 		var keepWithinPtr *string
