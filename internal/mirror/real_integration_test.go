@@ -44,12 +44,9 @@ func TestRealIntegration_PublishToStaging(t *testing.T) {
 		t.Fatalf("failed to create mirrors directory: %v", err)
 	}
 
-	if testConfig.Snapshot != nil {
-		testConfig.Snapshot.Path = filepath.Join(tmpDir, "snapshots")
-	} else {
+	if testConfig.Snapshot == nil {
 		// Add snapshot config if it doesn't exist
 		testConfig.Snapshot = &SnapshotConfig{
-			Path:              filepath.Join(tmpDir, "snapshots"),
 			DefaultNameFormat: "2006-01-02T15-04-05Z",
 			Prune: SnapshotPruneConfig{
 				KeepLast:   5,
@@ -58,8 +55,9 @@ func TestRealIntegration_PublishToStaging(t *testing.T) {
 		}
 	}
 
-	// Create the snapshots directory
-	err = os.MkdirAll(testConfig.Snapshot.Path, 0755)
+	// Create the snapshots directory (sibling to mirrors directory)
+	snapshotPath := filepath.Join(filepath.Dir(testConfig.Dir), ".snapshots")
+	err = os.MkdirAll(snapshotPath, 0755)
 	if err != nil {
 		t.Fatalf("failed to create snapshots directory: %v", err)
 	}
@@ -126,7 +124,8 @@ func TestRealIntegration_PublishToStaging(t *testing.T) {
 		t.Fatalf("failed to read staging symlink: %v", err)
 	}
 
-	expectedTarget := filepath.Join(testConfig.Snapshot.Path, testMirrorID, stagedSnapshot.Name)
+	snapshotPath = filepath.Join(filepath.Dir(testConfig.Dir), ".snapshots")
+	expectedTarget := filepath.Join(snapshotPath, testMirrorID, stagedSnapshot.Name)
 	if target != expectedTarget {
 		t.Errorf("staging symlink should point to %s, but points to %s", expectedTarget, target)
 	}
@@ -172,11 +171,11 @@ func TestRealIntegration_ForceFlag(t *testing.T) {
 	if testConfig.Snapshot == nil {
 		testConfig.Snapshot = &SnapshotConfig{}
 	}
-	testConfig.Snapshot.Path = filepath.Join(tmpDir, "snapshots")
 	testConfig.Snapshot.DefaultNameFormat = "test-force-snapshot" // Fixed name to ensure collision
 
-	// Create the snapshots directory
-	err = os.MkdirAll(testConfig.Snapshot.Path, 0755)
+	// Create the snapshots directory (sibling to mirrors directory)
+	snapshotPath := filepath.Join(filepath.Dir(testConfig.Dir), ".snapshots")
+	err = os.MkdirAll(snapshotPath, 0755)
 	if err != nil {
 		t.Fatalf("failed to create snapshots directory: %v", err)
 	}

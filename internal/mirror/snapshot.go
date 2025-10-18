@@ -11,7 +11,6 @@ import (
 
 // SnapshotConfig defines global snapshot configuration
 type SnapshotConfig struct {
-	Path              string              `toml:"path"`
 	DefaultNameFormat string              `toml:"default_name_format"`
 	Prune             SnapshotPruneConfig `toml:"prune"`
 }
@@ -32,8 +31,9 @@ type MirrorSnapshotConfig struct {
 
 // SnapshotManager handles snapshot operations
 type SnapshotManager struct {
-	config   *SnapshotConfig
-	livePath string // Base path where live mirrors are symlinked (e.g., /var/www/apt)
+	config       *SnapshotConfig
+	livePath     string // Base path where live mirrors are symlinked (e.g., /var/www/apt)
+	snapshotPath string // Path where snapshots are stored (always .snapshots sibling to livePath)
 }
 
 // SnapshotInfo represents a snapshot
@@ -65,12 +65,49 @@ func (s *SnapshotInfo) Status() string {
 	return "(" + strings.Join(statusParts, ", ") + ")"
 }
 
-// NewSnapshotManager creates a new snapshot manager
-func NewSnapshotManager(config *SnapshotConfig, livePath string) *SnapshotManager {
-	// Set defaults if not configured
-	if config.Path == "" {
-		config.Path = "/var/lib/mirrorctl/snapshots"
+// ValidatePathComponent ensures a string is safe to use as a path component.
+// This prevents path traversal attacks by rejecting dangerous characters and patterns.
+func ValidatePathComponent(component string) error {
+	if component == "" {
+		return fmt.Errorf("path component cannot be empty")
 	}
+
+	// Reject path traversal attempts
+	if strings.Contains(component, "..") {
+		return fmt.Errorf("path component cannot contain '..'")
+	}
+
+	// Reject absolute paths
+	if filepath.IsAbs(component) {
+		return fmt.Errorf("path component cannot be an absolute path")
+	}
+
+	// Reject path separators (both OS-specific and forward slash)
+	if strings.ContainsAny(component, string(os.PathSeparator)+"/\\") {
+		return fmt.Errorf("path component cannot contain path separators")
+	}
+
+	// Reject special entries
+	if component == "." {
+		return fmt.Errorf("path component cannot be '.'")
+	}
+
+	return nil
+}
+
+// NewSnapshotManager creates a new snapshot manager.
+// The snapshot path is always set to a .snapshots directory as a sibling
+// to the mirror directory (e.g., if livePath is /var/www/mirrors, snapshots
+// will be stored in /var/www/.snapshots). This ensures snapshots are on the
+// same filesystem as mirrors (required for hard links) and keeps related data
+// co-located for easier management.
+func NewSnapshotManager(config *SnapshotConfig, livePath string) *SnapshotManager {
+	// Always place snapshots as a sibling to the mirror directory
+	// e.g., /var/www/mirrors -> /var/www/.snapshots
+	// This is NOT configurable for security reasons
+	snapshotPath := filepath.Join(filepath.Dir(livePath), ".snapshots")
+
+	// Set defaults if not configured
 	if config.DefaultNameFormat == "" {
 		config.DefaultNameFormat = "2006-01-02T15-04-05Z"
 	}
@@ -82,19 +119,76 @@ func NewSnapshotManager(config *SnapshotConfig, livePath string) *SnapshotManage
 	}
 
 	return &SnapshotManager{
-		config:   config,
-		livePath: livePath,
+		config:       config,
+		livePath:     livePath,
+		snapshotPath: snapshotPath,
 	}
 }
 
-// GetSnapshotPath returns the path for a specific snapshot
-func (sm *SnapshotManager) GetSnapshotPath(mirror, snapshot string) string {
-	return filepath.Join(sm.config.Path, mirror, snapshot)
+// GetSnapshotPath returns the path for a specific snapshot.
+// Returns an error if the mirror or snapshot names contain invalid characters
+// or if the resolved path would escape the snapshot directory.
+func (sm *SnapshotManager) GetSnapshotPath(mirror, snapshot string) (string, error) {
+	// Validate inputs
+	if err := ValidatePathComponent(mirror); err != nil {
+		return "", fmt.Errorf("invalid mirror ID: %w", err)
+	}
+	if err := ValidatePathComponent(snapshot); err != nil {
+		return "", fmt.Errorf("invalid snapshot name: %w", err)
+	}
+
+	// Construct path
+	path := filepath.Join(sm.snapshotPath, mirror, snapshot)
+
+	// Verify containment (defense in depth)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	absBase, err := filepath.Abs(sm.snapshotPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve base path: %w", err)
+	}
+
+	// Ensure resolved path is still within snapshot directory
+	relPath, err := filepath.Rel(absBase, absPath)
+	if err != nil || strings.HasPrefix(relPath, "..") {
+		return "", fmt.Errorf("path traversal attempt detected")
+	}
+
+	return path, nil
 }
 
-// GetMirrorSnapshotsPath returns the path containing all snapshots for a mirror
-func (sm *SnapshotManager) GetMirrorSnapshotsPath(mirror string) string {
-	return filepath.Join(sm.config.Path, mirror)
+// GetMirrorSnapshotsPath returns the path containing all snapshots for a mirror.
+// Returns an error if the mirror name contains invalid characters.
+func (sm *SnapshotManager) GetMirrorSnapshotsPath(mirror string) (string, error) {
+	// Validate input
+	if err := ValidatePathComponent(mirror); err != nil {
+		return "", fmt.Errorf("invalid mirror ID: %w", err)
+	}
+
+	// Construct path
+	path := filepath.Join(sm.snapshotPath, mirror)
+
+	// Verify containment (defense in depth)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	absBase, err := filepath.Abs(sm.snapshotPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve base path: %w", err)
+	}
+
+	// Ensure resolved path is still within snapshot directory
+	relPath, err := filepath.Rel(absBase, absPath)
+	if err != nil || strings.HasPrefix(relPath, "..") {
+		return "", fmt.Errorf("path traversal attempt detected")
+	}
+
+	return path, nil
 }
 
 // GetLivePath returns the path for the live mirror symlink
@@ -162,7 +256,10 @@ func (sm *SnapshotManager) GetCurrentlyStaged(mirror string) (string, error) {
 
 // ListSnapshots returns all snapshots for a mirror
 func (sm *SnapshotManager) ListSnapshots(mirror string) ([]*SnapshotInfo, error) {
-	snapshotsPath := sm.GetMirrorSnapshotsPath(mirror)
+	snapshotsPath, err := sm.GetMirrorSnapshotsPath(mirror)
+	if err != nil {
+		return nil, err
+	}
 
 	// Check if snapshots directory exists
 	if _, err := os.Stat(snapshotsPath); os.IsNotExist(err) {
@@ -241,7 +338,10 @@ func (sm *SnapshotManager) CreateSnapshot(mirror, snapshotName string, force boo
 	}
 
 	livePath := sm.GetLivePath(mirror)
-	snapshotPath := sm.GetSnapshotPath(mirror, snapshotName)
+	snapshotPath, err := sm.GetSnapshotPath(mirror, snapshotName)
+	if err != nil {
+		return "", err
+	}
 
 	// Check if live mirror exists and resolve symlink if needed
 	if _, err := os.Stat(livePath); os.IsNotExist(err) {
@@ -319,7 +419,10 @@ func (sm *SnapshotManager) createHardLinks(src, dst string) error {
 
 // PublishSnapshot makes a snapshot the live version by updating the symlink
 func (sm *SnapshotManager) PublishSnapshot(mirror, snapshotName string) error {
-	snapshotPath := sm.GetSnapshotPath(mirror, snapshotName)
+	snapshotPath, err := sm.GetSnapshotPath(mirror, snapshotName)
+	if err != nil {
+		return err
+	}
 	livePath := sm.GetLivePath(mirror)
 
 	// Verify snapshot exists
@@ -359,7 +462,10 @@ func (sm *SnapshotManager) PublishSnapshot(mirror, snapshotName string) error {
 
 // PublishSnapshotToStaging makes a snapshot the staged version by updating the staging symlink
 func (sm *SnapshotManager) PublishSnapshotToStaging(mirror, snapshotName string) error {
-	snapshotPath := sm.GetSnapshotPath(mirror, snapshotName)
+	snapshotPath, err := sm.GetSnapshotPath(mirror, snapshotName)
+	if err != nil {
+		return err
+	}
 	stagingPath := sm.GetStagingPath(mirror)
 
 	// Verify snapshot exists
@@ -453,7 +559,10 @@ func (sm *SnapshotManager) PromoteSnapshot(mirror string) (string, error) {
 
 // DeleteSnapshot removes a snapshot
 func (sm *SnapshotManager) DeleteSnapshot(mirror, snapshotName string, force bool) error {
-	snapshotPath := sm.GetSnapshotPath(mirror, snapshotName)
+	snapshotPath, err := sm.GetSnapshotPath(mirror, snapshotName)
+	if err != nil {
+		return err
+	}
 
 	// Verify snapshot exists
 	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {

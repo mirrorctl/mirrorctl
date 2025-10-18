@@ -139,10 +139,8 @@ func gc(ctx context.Context, config *Config) error {
 		}
 
 		// Validate that the resolved symlink stays within safe boundaries
-		var snapshotDir string
-		if config.Snapshot != nil {
-			snapshotDir = config.Snapshot.Path
-		}
+		// Snapshot directory is always a .snapshots sibling to the mirror directory
+		snapshotDir := filepath.Join(filepath.Dir(config.Dir), ".snapshots")
 		if err := validateSymlinkPath(filePath, config.Dir, snapshotDir); err != nil {
 			return errors.Wrap(err, "gc: unsafe symlink "+dirEntry.Name())
 		}

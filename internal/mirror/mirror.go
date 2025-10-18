@@ -151,10 +151,8 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 		return nil, errors.Wrap(err, mirrorID)
 	default:
 		// Validate that the resolved symlink stays within safe boundaries
-		var snapshotDir string
-		if config.Snapshot != nil {
-			snapshotDir = config.Snapshot.Path
-		}
+		// Snapshot directory is always a .snapshots sibling to the mirror directory
+		snapshotDir := filepath.Join(filepath.Dir(directory), ".snapshots")
 		if err := validateSymlinkPath(currentDir, directory, snapshotDir); err != nil {
 			return nil, errors.Wrap(err, "NewMirror: "+mirrorID)
 		}

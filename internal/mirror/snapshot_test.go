@@ -15,7 +15,6 @@ func TestSnapshotManager_Basic(t *testing.T) {
 
 	// Create config
 	config := &SnapshotConfig{
-		Path:              filepath.Join(tmpDir, "snapshots"),
 		DefaultNameFormat: "2006-01-02T15-04-05Z",
 		Prune: SnapshotPruneConfig{
 			KeepLast:   3,
@@ -27,8 +26,11 @@ func TestSnapshotManager_Basic(t *testing.T) {
 	sm := NewSnapshotManager(config, livePath)
 
 	// Test path generation
-	expectedSnapshotPath := filepath.Join(tmpDir, "snapshots", "test-mirror", "snapshot-1")
-	actualSnapshotPath := sm.GetSnapshotPath("test-mirror", "snapshot-1")
+	expectedSnapshotPath := filepath.Join(tmpDir, ".snapshots", "test-mirror", "snapshot-1")
+	actualSnapshotPath, err := sm.GetSnapshotPath("test-mirror", "snapshot-1")
+	if err != nil {
+		t.Fatalf("GetSnapshotPath failed: %v", err)
+	}
 	if actualSnapshotPath != expectedSnapshotPath {
 		t.Errorf("expected snapshot path %s, got %s", expectedSnapshotPath, actualSnapshotPath)
 	}
@@ -75,7 +77,6 @@ func TestSnapshotManager_CreateAndList(t *testing.T) {
 
 	// Create snapshot manager
 	config := &SnapshotConfig{
-		Path:              filepath.Join(tmpDir, "snapshots"),
 		DefaultNameFormat: "test-snapshot",
 	}
 	sm := NewSnapshotManager(config, livePath)
@@ -91,7 +92,11 @@ func TestSnapshotManager_CreateAndList(t *testing.T) {
 	}
 
 	// Verify snapshot file exists
-	snapshotFile := filepath.Join(sm.GetSnapshotPath("test-mirror", "snapshot-1"), "test.txt")
+	snapshotPath, err := sm.GetSnapshotPath("test-mirror", "snapshot-1")
+	if err != nil {
+		t.Fatalf("GetSnapshotPath failed: %v", err)
+	}
+	snapshotFile := filepath.Join(snapshotPath, "test.txt")
 	if _, err := os.Stat(snapshotFile); os.IsNotExist(err) {
 		t.Error("snapshot file should exist")
 	}
@@ -160,9 +165,7 @@ func TestSnapshotManager_PublishAndDelete(t *testing.T) {
 	}
 
 	// Create snapshot manager
-	config := &SnapshotConfig{
-		Path: filepath.Join(tmpDir, "snapshots"),
-	}
+	config := &SnapshotConfig{}
 	sm := NewSnapshotManager(config, livePath)
 
 	// Create snapshots from mirror data (temporarily create symlink for CreateSnapshot)
@@ -211,7 +214,10 @@ func TestSnapshotManager_PublishAndDelete(t *testing.T) {
 		t.Fatalf("failed to read live symlink: %v", err)
 	}
 
-	expectedTarget := sm.GetSnapshotPath("test-mirror", "snapshot-1")
+	expectedTarget, err := sm.GetSnapshotPath("test-mirror", "snapshot-1")
+	if err != nil {
+		t.Fatalf("GetSnapshotPath failed: %v", err)
+	}
 	if target != expectedTarget {
 		t.Errorf("expected symlink target %s, got %s", expectedTarget, target)
 	}
@@ -266,7 +272,6 @@ func TestSnapshotManager_PerMirrorNaming(t *testing.T) {
 
 	// Create snapshot manager with default format
 	config := &SnapshotConfig{
-		Path:              filepath.Join(tmpDir, "snapshots"),
 		DefaultNameFormat: "2006-01-02T15-04-05Z",
 	}
 	sm := NewSnapshotManager(config, livePath)
@@ -373,7 +378,6 @@ func TestSnapshotManager_Prune(t *testing.T) {
 
 	// Create snapshot manager with strict retention policy
 	config := &SnapshotConfig{
-		Path: filepath.Join(tmpDir, "snapshots"),
 		Prune: SnapshotPruneConfig{
 			KeepLast:   2,
 			KeepWithin: "1s", // Very short for testing
@@ -484,9 +488,7 @@ func TestSnapshotManager_StagingWorkflow(t *testing.T) {
 	}
 
 	// Create snapshot manager
-	config := &SnapshotConfig{
-		Path: filepath.Join(tmpDir, "snapshots"),
-	}
+	config := &SnapshotConfig{}
 	sm := NewSnapshotManager(config, livePath)
 
 	// Create live symlink for CreateSnapshot to work
@@ -603,7 +605,6 @@ func TestSnapshotManager_StagingProtection(t *testing.T) {
 
 	// Create snapshot manager
 	config := &SnapshotConfig{
-		Path: filepath.Join(tmpDir, "snapshots"),
 		Prune: SnapshotPruneConfig{
 			KeepLast:   1,
 			KeepWithin: "1s", // Very short for testing
@@ -678,9 +679,7 @@ func TestSnapshotManager_PromoteErrors(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create snapshot manager
-	config := &SnapshotConfig{
-		Path: filepath.Join(tmpDir, "snapshots"),
-	}
+	config := &SnapshotConfig{}
 	sm := NewSnapshotManager(config, filepath.Join(tmpDir, "live"))
 
 	// Try to promote when nothing is staged (should fail)
@@ -750,6 +749,138 @@ func TestSnapshotInfo_Status(t *testing.T) {
 	}
 }
 
+func TestSnapshotManager_PathTraversalProtection(t *testing.T) {
+	// Create temporary directory for testing
+	tmpDir := t.TempDir()
+
+	// Create snapshot manager
+	config := &SnapshotConfig{}
+	sm := NewSnapshotManager(config, filepath.Join(tmpDir, "live"))
+
+	// Test cases for path traversal attempts
+	testCases := []struct {
+		name         string
+		mirror       string
+		snapshot     string
+		shouldFail   bool
+		description  string
+	}{
+		{
+			name:        "valid names",
+			mirror:      "ubuntu",
+			snapshot:    "2024-01-15",
+			shouldFail:  false,
+			description: "normal valid names should work",
+		},
+		{
+			name:        "path traversal in mirror",
+			mirror:      "../../etc",
+			snapshot:    "passwd",
+			shouldFail:  true,
+			description: "should reject .. in mirror name",
+		},
+		{
+			name:        "path traversal in snapshot",
+			mirror:      "ubuntu",
+			snapshot:    "../../../etc/passwd",
+			shouldFail:  true,
+			description: "should reject .. in snapshot name",
+		},
+		{
+			name:        "absolute path in mirror",
+			mirror:      "/etc/passwd",
+			snapshot:    "test",
+			shouldFail:  true,
+			description: "should reject absolute paths in mirror",
+		},
+		{
+			name:        "absolute path in snapshot",
+			mirror:      "ubuntu",
+			snapshot:    "/etc/passwd",
+			shouldFail:  true,
+			description: "should reject absolute paths in snapshot",
+		},
+		{
+			name:        "forward slash in mirror",
+			mirror:      "ubuntu/malicious",
+			snapshot:    "test",
+			shouldFail:  true,
+			description: "should reject forward slash in mirror",
+		},
+		{
+			name:        "forward slash in snapshot",
+			mirror:      "ubuntu",
+			snapshot:    "test/malicious",
+			shouldFail:  true,
+			description: "should reject forward slash in snapshot",
+		},
+		{
+			name:        "dot in mirror",
+			mirror:      ".",
+			snapshot:    "test",
+			shouldFail:  true,
+			description: "should reject dot as mirror name",
+		},
+		{
+			name:        "empty mirror",
+			mirror:      "",
+			snapshot:    "test",
+			shouldFail:  true,
+			description: "should reject empty mirror name",
+		},
+		{
+			name:        "empty snapshot",
+			mirror:      "ubuntu",
+			snapshot:    "",
+			shouldFail:  true,
+			description: "should reject empty snapshot name",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := sm.GetSnapshotPath(tc.mirror, tc.snapshot)
+
+			if tc.shouldFail {
+				if err == nil {
+					t.Errorf("%s: expected error but got none", tc.description)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("%s: expected success but got error: %v", tc.description, err)
+				}
+			}
+		})
+	}
+
+	// Also test GetMirrorSnapshotsPath
+	for _, tc := range testCases {
+		if tc.mirror == "" {
+			continue // Skip empty mirror test for this function
+		}
+		t.Run(tc.name+"_mirror_path", func(t *testing.T) {
+			_, err := sm.GetMirrorSnapshotsPath(tc.mirror)
+
+			// Should fail if mirror name is invalid
+			mirrorInvalid := tc.mirror == "../../etc" ||
+				tc.mirror == "/etc/passwd" ||
+				tc.mirror == "ubuntu/malicious" ||
+				tc.mirror == "." ||
+				tc.mirror == ""
+
+			if mirrorInvalid {
+				if err == nil {
+					t.Errorf("%s: expected error for GetMirrorSnapshotsPath but got none", tc.description)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("%s: expected success for GetMirrorSnapshotsPath but got error: %v", tc.description, err)
+				}
+			}
+		})
+	}
+}
+
 func TestSnapshotManager_DeleteWithForce(t *testing.T) {
 	// Create temporary directory for testing
 	tmpDir := t.TempDir()
@@ -768,9 +899,7 @@ func TestSnapshotManager_DeleteWithForce(t *testing.T) {
 	}
 
 	// Create snapshot manager
-	config := &SnapshotConfig{
-		Path: filepath.Join(tmpDir, "snapshots"),
-	}
+	config := &SnapshotConfig{}
 	sm := NewSnapshotManager(config, livePath)
 
 	// Create live symlink and snapshots

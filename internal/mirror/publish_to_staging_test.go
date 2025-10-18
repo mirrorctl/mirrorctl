@@ -12,7 +12,6 @@ func TestHandleSnapshotting_PublishToStaging(t *testing.T) {
 
 	// Setup directory structure
 	mirrorDir := filepath.Join(tmpDir, "mirrors")
-	snapshotDir := filepath.Join(tmpDir, "snapshots")
 
 	// Create test mirror data
 	testMirrorPath := filepath.Join(mirrorDir, "test-mirror")
@@ -35,7 +34,6 @@ func TestHandleSnapshotting_PublishToStaging(t *testing.T) {
 	config := &Config{
 		Dir: mirrorDir,
 		Snapshot: &SnapshotConfig{
-			Path:              snapshotDir,
 			DefaultNameFormat: "2006-01-02",
 		},
 		Mirrors: map[string]*MirrorConfig{
@@ -125,7 +123,6 @@ func TestHandleSnapshotting_WithForce(t *testing.T) {
 
 	// Setup directory structure
 	mirrorDir := filepath.Join(tmpDir, "mirrors")
-	snapshotDir := filepath.Join(tmpDir, "snapshots")
 
 	// Create test mirror data
 	testMirrorPath := filepath.Join(mirrorDir, "test-mirror")
@@ -145,7 +142,6 @@ func TestHandleSnapshotting_WithForce(t *testing.T) {
 	config := &Config{
 		Dir: mirrorDir,
 		Snapshot: &SnapshotConfig{
-			Path:              snapshotDir,
 			DefaultNameFormat: "test-snapshot", // Fixed name to ensure collision
 		},
 		Mirrors: map[string]*MirrorConfig{
@@ -244,7 +240,6 @@ func TestHandleSnapshotting_NoSnapshotConfig(t *testing.T) {
 
 	// Test with a valid snapshot config
 	config.Snapshot = &SnapshotConfig{
-		Path:              "/tmp/test/snapshots",
 		DefaultNameFormat: "test",
 	}
 
