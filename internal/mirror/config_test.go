@@ -143,3 +143,80 @@ func TestMirrorConfig(t *testing.T) {
 		t.Error(`should match bionic main binary-amd64 Packages`)
 	}
 }
+
+func TestConfig_Check(t *testing.T) {
+	t.Parallel()
+
+	// Valid config
+	c1 := NewConfig()
+	c1.Dir = "/tmp"
+	if err := c1.Check(); err != nil {
+		t.Errorf("expected no error, but got: %v", err)
+	}
+
+	// Missing Dir
+	c2 := NewConfig()
+	if err := c2.Check(); err == nil {
+		t.Error("expected an error for missing dir, but got none")
+	}
+
+	// Relative Dir
+	c3 := NewConfig()
+	c3.Dir = "tmp"
+	if err := c3.Check(); err == nil {
+		t.Error("expected an error for relative dir, but got none")
+	}
+
+	// Zero MaxConns
+	c4 := NewConfig()
+	c4.Dir = "/tmp"
+	c4.MaxConns = 0
+	if err := c4.Check(); err == nil {
+		t.Error("expected an error for zero max_conns, but got none")
+	}
+
+	// Negative MaxConns
+	c5 := NewConfig()
+	c5.Dir = "/tmp"
+	c5.MaxConns = -1
+	if err := c5.Check(); err == nil {
+		t.Error("expected an error for negative max_conns, but got none")
+	}
+
+	// Invalid mirror IDs
+	invalidMirrorIDs := []struct {
+		id     string
+		reason string
+	}{
+		{"../etc", "path traversal"},
+		{"/etc/passwd", "absolute path"},
+		{"MyMirror", "uppercase letters"},
+		{"mirror.prod", "dots"},
+		{"foo/bar", "forward slash"},
+		{"test\\path", "backslash"},
+		{"mirror name", "space"},
+		{"", "empty string"},
+	}
+
+	for _, tc := range invalidMirrorIDs {
+		c := NewConfig()
+		c.Dir = "/tmp"
+		c.Mirrors = map[string]*MirrorConfig{
+			tc.id: {},
+		}
+
+		if err := c.Check(); err == nil {
+			t.Errorf("expected error for mirror ID %q (%s), but got none", tc.id, tc.reason)
+		}
+	}
+
+	// Valid mirror ID
+	c6 := NewConfig()
+	c6.Dir = "/tmp"
+	c6.Mirrors = map[string]*MirrorConfig{
+		"valid-mirror_123": {},
+	}
+	if err := c6.Check(); err != nil {
+		t.Errorf("expected no error for valid mirror ID, but got: %v", err)
+	}
+}

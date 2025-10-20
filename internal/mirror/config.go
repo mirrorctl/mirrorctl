@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
@@ -512,6 +513,18 @@ func (c *Config) Check() error {
 	if !path.IsAbs(c.Dir) {
 		return errors.New("dir must be an absolute path")
 	}
+
+	if c.MaxConns <= 0 {
+		return errors.New("max_conns must be a positive integer")
+	}
+
+	// Validate mirror IDs
+	for mirrorID := range c.Mirrors {
+		if !IsValidID(mirrorID) {
+			return fmt.Errorf("invalid mirror ID %q: must contain only lowercase letters, numbers, hyphens, and underscores", mirrorID)
+		}
+	}
+
 	return nil
 }
 

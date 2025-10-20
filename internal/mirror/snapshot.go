@@ -66,30 +66,15 @@ func (s *SnapshotInfo) Status() string {
 }
 
 // ValidatePathComponent ensures a string is safe to use as a path component.
-// This prevents path traversal attacks by rejecting dangerous characters and patterns.
+// This prevents path traversal attacks by enforcing the same validation as mirror IDs.
+// Valid components must match: ^[a-z0-9_-]+$
 func ValidatePathComponent(component string) error {
 	if component == "" {
 		return fmt.Errorf("path component cannot be empty")
 	}
 
-	// Reject path traversal attempts
-	if strings.Contains(component, "..") {
-		return fmt.Errorf("path component cannot contain '..'")
-	}
-
-	// Reject absolute paths
-	if filepath.IsAbs(component) {
-		return fmt.Errorf("path component cannot be an absolute path")
-	}
-
-	// Reject path separators (both OS-specific and forward slash)
-	if strings.ContainsAny(component, string(os.PathSeparator)+"/\\") {
-		return fmt.Errorf("path component cannot contain path separators")
-	}
-
-	// Reject special entries
-	if component == "." {
-		return fmt.Errorf("path component cannot be '.'")
+	if !IsValidID(component) {
+		return fmt.Errorf("path component must contain only lowercase letters, numbers, hyphens, and underscores (got: %q)", component)
 	}
 
 	return nil
