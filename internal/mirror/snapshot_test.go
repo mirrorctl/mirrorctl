@@ -759,11 +759,11 @@ func TestSnapshotManager_PathTraversalProtection(t *testing.T) {
 
 	// Test cases for path traversal attempts
 	testCases := []struct {
-		name         string
-		mirror       string
-		snapshot     string
-		shouldFail   bool
-		description  string
+		name        string
+		mirror      string
+		snapshot    string
+		shouldFail  bool
+		description string
 	}{
 		{
 			name:        "valid names",
