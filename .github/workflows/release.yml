@@ -1,3 +1,4 @@
+---
 name: Release
 
 on:
@@ -16,7 +17,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Fetch full history for changelog generation
           fetch-depth: 0
 
       - name: Setup Go
@@ -40,6 +40,9 @@ jobs:
           # Uncomment if you plan to push Docker images to GitHub Container Registry
           # REGISTRY_USERNAME: ${{ github.actor }}
           # REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Go Dependency Submission
+        uses: actions/go-dependency-submission@v2.0.3
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
@@ -65,7 +68,7 @@ jobs:
           fi
 
           # Sign SBOM files
-          for sbom in dist/*.spdx.json dist/*.cyclonedx.json; do
+          for sbom in dist/*.spdx.json; do
             if [ -f "$sbom" ]; then
               echo "Signing $sbom"
               cosign sign-blob --yes --key cosign.key --output-signature "${sbom}.sig" "$sbom"
@@ -91,9 +94,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest ]
+        os: [ubuntu-latest, macos-latest]
         go-version: ['1.24']
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
