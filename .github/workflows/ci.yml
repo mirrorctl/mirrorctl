@@ -1,10 +1,11 @@
+---
 name: CI
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches: [master, main, develop]
   pull_request:
-    branches: [ master, main ]
+    branches: [master, main]
 
 jobs:
   test:
@@ -14,7 +15,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         go-version: ['1.24']
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,7 +38,7 @@ jobs:
 
       - name: Generate SBOM
         run: |
-          syft scan . --output spdx-json=sbom.spdx.json --output cyclonedx-json=sbom.cyclonedx.json
+          syft scan . --output spdx-json=sbom.spdx.json
 
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@v4
@@ -45,13 +46,11 @@ jobs:
           name: sbom-${{ matrix.os }}-go${{ matrix.go-version }}
           path: |
             sbom.spdx.json
-            sbom.cyclonedx.json
-
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -89,19 +88,17 @@ jobs:
       - name: Run Gosec Security Scanner
         uses: securego/gosec@master
         with:
-          args: './...'
-# Scanning results can only be published on paid or public repos
-#          args: '-no-fail -fmt sarif -out results.sarif ./...'
-#      - name: Upload SARIF to Security tab
-#        uses: github/codeql-action/upload-sarif@v3
-#        with:
-#          sarif_file: results.sarif
+          args: '-no-fail -fmt sarif -out results.sarif ./...'
+      - name: Upload SARIF to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
 
   # Test GoReleaser build without releasing
   goreleaser-check:
     name: GoReleaser Check
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
