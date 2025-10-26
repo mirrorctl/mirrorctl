@@ -64,12 +64,6 @@ sboms:
     documents:
       - "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.spdx.json"
 
-  - # Generate CycloneDX SBOM for each release archive.
-    id: archive-cyclonedx
-    artifacts: archive
-    documents:
-      - "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.cyclonedx.json"
-
 
 checksum:
   name_template: "checksums.txt"
@@ -104,10 +98,6 @@ changelog:
 
 # GitHub release configuration
 release:
-  github:
-    owner: mirrorctl
-    name: mirrorctl
-
   draft: false
   prerelease: auto
   mode: replace

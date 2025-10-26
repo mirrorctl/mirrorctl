@@ -81,10 +81,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
+          # Verify release exists
+          echo "Checking if release ${{ github.ref_name }} exists..."
+          gh release view ${{ github.ref_name }} || {
+            echo "Release not found. Waiting 10 seconds and retrying..."
+            sleep 10
+            gh release view ${{ github.ref_name }}
+          }
+
+          # Upload signature files
           for sig in dist/*.sig; do
             if [ -f "$sig" ]; then
               echo "Uploading $sig"
-              gh release upload ${{ github.ref_name }} "$sig"
+              gh release upload ${{ github.ref_name }} "$sig" --clobber
             fi
           done
 
