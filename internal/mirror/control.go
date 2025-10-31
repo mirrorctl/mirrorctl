@@ -283,5 +283,15 @@ func Run(config *Config, mirrors []string, noPGPCheck, quiet, dryRun, force bool
 
 		return gc(ctx, config)
 	})
-	return group.Wait()
+	err = group.Wait()
+	if err != nil {
+		return err
+	}
+
+	if dryRun {
+		slog.Info("sync is fully complete (dry-run)")
+	} else {
+		slog.Info("sync is fully complete")
+	}
+	return nil
 }
