@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/cockroachdb/errors"
+	"github.com/schollz/progressbar/v3"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/mirrorctl/mirrorctl/internal/apt"
@@ -17,15 +19,18 @@ import (
 
 // HTTPClient handles HTTP downloading with retries and by-hash fallback.
 type HTTPClient struct {
-	client    *http.Client
-	semaphore chan struct{}
-	mirrorID  string
-	storage   *Storage
-	current   *Storage // For file reuse logic
+	client       *http.Client
+	semaphore    chan struct{}
+	mirrorID     string
+	storage      *Storage
+	current      *Storage // For file reuse logic
+	showProgress bool
+	progressBar  *progressbar.ProgressBar
+	progressMu   sync.Mutex
 }
 
 // NewHTTPClient creates a new HTTP client for downloads.
-func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Storage, tlsConfig *TLSConfig) *HTTPClient {
+func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Storage, tlsConfig *TLSConfig, showProgress bool) *HTTPClient {
 	semaphore := make(chan struct{}, maxConns)
 
 	// Pre-fill the semaphore with tokens
@@ -34,11 +39,12 @@ func NewHTTPClient(maxConns int, mirrorID string, storage *Storage, current *Sto
 	}
 
 	return &HTTPClient{
-		client:    clonedTransport(tlsConfig),
-		semaphore: semaphore,
-		mirrorID:  mirrorID,
-		storage:   storage,
-		current:   current,
+		client:       clonedTransport(tlsConfig),
+		semaphore:    semaphore,
+		mirrorID:     mirrorID,
+		storage:      storage,
+		current:      current,
+		showProgress: showProgress,
 	}
 }
 
@@ -210,6 +216,21 @@ func (h *HTTPClient) downloadFilesWithContext(ctx context.Context, mirrorConfig 
 	results := make(chan *dlResult, len(fil))
 	var reused, downloaded []*apt.FileInfo
 
+	// Initialize progress bar if enabled
+	if h.showProgress && len(fil) > 0 {
+		h.progressMu.Lock()
+		h.progressBar = progressbar.NewOptions(len(fil),
+			progressbar.OptionSetDescription(fmt.Sprintf("[%s] %s", h.mirrorID, fileType)),
+			progressbar.OptionSetWidth(40),
+			progressbar.OptionShowCount(),
+			progressbar.OptionShowIts(),
+			progressbar.OptionSetPredictTime(true),
+			progressbar.OptionClearOnFinish(),
+			progressbar.OptionSetRenderBlankState(true),
+		)
+		h.progressMu.Unlock()
+	}
+
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
@@ -224,6 +245,14 @@ func (h *HTTPClient) downloadFilesWithContext(ctx context.Context, mirrorConfig 
 	err := g.Wait()
 	if err != nil {
 		return nil, err
+	}
+
+	// Finish progress bar if enabled
+	if h.showProgress && h.progressBar != nil {
+		h.progressMu.Lock()
+		_ = h.progressBar.Finish()
+		h.progressBar = nil
+		h.progressMu.Unlock()
 	}
 
 	// Log download stats with file type context
@@ -267,6 +296,14 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrorCo
 					return nil, errors.Wrap(err, "storeLink")
 				}
 				reused = append(reused, localfi)
+
+				// Update progress bar for reused files
+				if h.showProgress && h.progressBar != nil {
+					h.progressMu.Lock()
+					_ = h.progressBar.Add(1)
+					h.progressMu.Unlock()
+				}
+
 				continue
 			}
 		}
@@ -290,6 +327,13 @@ func (h *HTTPClient) reuseOrDownload(ctx context.Context, mirrorConfig *MirrorCo
 func (h *HTTPClient) handleResult(r *dlResult, allowMissing, byhash bool) (*apt.FileInfo, error) {
 	if r.tempfile != nil {
 		defer closeAndRemoveFile(r.tempfile)
+	}
+
+	// Update progress bar
+	if h.showProgress && h.progressBar != nil {
+		h.progressMu.Lock()
+		_ = h.progressBar.Add(1)
+		h.progressMu.Unlock()
 	}
 
 	if r.err != nil {

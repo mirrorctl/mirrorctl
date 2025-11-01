@@ -177,9 +177,12 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 		return nil, errors.Wrap(err, mirrorID)
 	}
 
+	// Determine if progress bars should be shown
+	showProgress := config.Log.ShouldShowProgress()
+
 	// Create components with effective TLS configuration
 	effectiveTLS := mirrorConfig.GetEffectiveTLSConfig(&config.TLS)
-	httpClient := NewHTTPClient(config.MaxConns, mirrorID, storage, currentStorage, effectiveTLS)
+	httpClient := NewHTTPClient(config.MaxConns, mirrorID, storage, currentStorage, effectiveTLS, showProgress)
 	parser := NewAPTParser(storage, mirrorConfig, mirrorID)
 
 	mirror := &Mirror{

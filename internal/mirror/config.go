@@ -482,6 +482,13 @@ func (lc *LogConfig) Apply() error {
 	return nil
 }
 
+// ShouldShowProgress returns true if progress bars should be displayed.
+// Progress bars are shown when log level is error or warn (less verbose).
+func (lc *LogConfig) ShouldShowProgress() bool {
+	level := strings.ToLower(lc.Level)
+	return level == "error" || level == "warn" || level == "warning"
+}
+
 // Config is a struct to read TOML configurations.
 //
 // Use https://github.com/BurntSushi/toml as follows:
