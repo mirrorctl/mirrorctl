@@ -350,6 +350,12 @@ func runMirror(cmd *cobra.Command, args []string) {
 
 	verboseErrors, _ := cmd.Flags().GetBool("verbose-errors")
 	quiet, _ := cmd.Flags().GetBool("quiet")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+	// When dry-run is set, use quiet logging (error level only)
+	if dryRun {
+		quiet = true
+	}
 
 	config, err := loadAndApplyConfig(ConfigOptions{
 		VerboseErrors: verboseErrors,
@@ -362,7 +368,6 @@ func runMirror(cmd *cobra.Command, args []string) {
 	}
 
 	noPGPCheck, _ := cmd.Flags().GetBool("no-pgp-check")
-	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
 
 	if err := mirror.Run(config, args, noPGPCheck, quiet, dryRun, force); err != nil {
