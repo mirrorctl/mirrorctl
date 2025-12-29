@@ -178,7 +178,8 @@ func NewMirror(timestamp time.Time, mirrorID string, config *Config, noPGPCheck,
 	}
 
 	// Determine if progress bars should be shown
-	showProgress := config.Log.ShouldShowProgress()
+	// Progress bars are disabled in dry-run mode
+	showProgress := config.Log.ShouldShowProgress() && !dryRun
 
 	// Create components with effective TLS configuration
 	effectiveTLS := mirrorConfig.GetEffectiveTLSConfig(&config.TLS)
