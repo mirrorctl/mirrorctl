@@ -65,19 +65,44 @@ func (s *SnapshotInfo) Status() string {
 	return "(" + strings.Join(statusParts, ", ") + ")"
 }
 
+// validateSafeName checks if a name contains only allowed characters.
+// Allowed: letters (lowercase by default, uppercase if allowUppercase=true), numbers, hyphens, underscores.
+func validateSafeName(name, label string, allowUppercase bool) error {
+	if name == "" {
+		return fmt.Errorf("%s cannot be empty", label)
+	}
+
+	for _, ch := range name {
+		isLower := ch >= 'a' && ch <= 'z'
+		isUpper := allowUppercase && (ch >= 'A' && ch <= 'Z')
+		isDigit := ch >= '0' && ch <= '9'
+		isSpecial := ch == '-' || ch == '_'
+
+		if !isLower && !isUpper && !isDigit && !isSpecial {
+			allowed := "lowercase letters"
+			if allowUppercase {
+				allowed = "letters"
+			}
+			return fmt.Errorf("%s must contain only %s, numbers, hyphens, and underscores (got: %q)", label, allowed, name)
+		}
+	}
+	return nil
+}
+
 // ValidatePathComponent ensures a string is safe to use as a path component.
 // This prevents path traversal attacks by enforcing the same validation as mirror IDs.
 // Valid components must match: ^[a-z0-9_-]+$
 func ValidatePathComponent(component string) error {
-	if component == "" {
-		return fmt.Errorf("path component cannot be empty")
-	}
+	return validateSafeName(component, "path component", false)
+}
 
-	if !IsValidID(component) {
-		return fmt.Errorf("path component must contain only lowercase letters, numbers, hyphens, and underscores (got: %q)", component)
-	}
-
-	return nil
+// ValidateSnapshotName ensures a snapshot name is safe to use as a path component.
+// Unlike mirror IDs, snapshot names can contain uppercase letters to support
+// standard date formats like RFC3339. This prevents path traversal while being
+// more permissive than mirror ID validation.
+// Valid snapshot names must match: ^[a-zA-Z0-9_-]+$
+func ValidateSnapshotName(name string) error {
+	return validateSafeName(name, "snapshot name", true)
 }
 
 // NewSnapshotManager creates a new snapshot manager.
@@ -114,11 +139,11 @@ func NewSnapshotManager(config *SnapshotConfig, livePath string) *SnapshotManage
 // Returns an error if the mirror or snapshot names contain invalid characters
 // or if the resolved path would escape the snapshot directory.
 func (sm *SnapshotManager) GetSnapshotPath(mirror, snapshot string) (string, error) {
-	// Validate inputs
+	// Validate inputs - mirror must be lowercase only, snapshot can have uppercase
 	if err := ValidatePathComponent(mirror); err != nil {
 		return "", fmt.Errorf("invalid mirror ID: %w", err)
 	}
-	if err := ValidatePathComponent(snapshot); err != nil {
+	if err := ValidateSnapshotName(snapshot); err != nil {
 		return "", fmt.Errorf("invalid snapshot name: %w", err)
 	}
 
