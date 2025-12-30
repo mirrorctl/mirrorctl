@@ -1198,11 +1198,11 @@ func TestSnapshotManager_GenerateSnapshotNameValidation(t *testing.T) {
 func TestValidateSnapshotName_AllowsUppercase(t *testing.T) {
 	// Test that snapshot names allow uppercase while mirror IDs do not
 	testCases := []struct {
-		name                 string
-		input                string
-		snapshotShouldPass   bool
-		mirrorIDShouldPass   bool
-		description          string
+		name               string
+		input              string
+		snapshotShouldPass bool
+		mirrorIDShouldPass bool
+		description        string
 	}{
 		{
 			name:               "lowercase only",
