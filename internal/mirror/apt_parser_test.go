@@ -38,14 +38,9 @@ func TestParsePackageNameVersion(t *testing.T) {
 			wantVer:  "1.1.1f-1ubuntu2.16",
 		},
 		{
-			name:     "package name with underscores",
-			filePath: "libgdk_pixbuf_2.0-0_2.40.0+dfsg-3ubuntu0.2_amd64.deb",
-			// This highlights a potential bug in the implementation or an assumption about package names.
-			// Debian policy says package names can contain +, -, ., and lowercase alphanumeric. No underscores.
-			// So split by "_" is safe for separating name, version, and arch.
-			// The test case "libgdk_pixbuf" is invalid for Debian, but "libgdk-pixbuf" is valid.
-			// Let's test "libgdk-pixbuf" instead.
-			wantName: "libgdk-pixbuf", // Valid name with hyphen
+			name:     "package name with hyphens",
+			filePath: "libgdk-pixbuf_2.40.0+dfsg-3_amd64.deb",
+			wantName: "libgdk-pixbuf",
 			wantVer:  "2.40.0+dfsg-3",
 		},
 		{
@@ -64,18 +59,12 @@ func TestParsePackageNameVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Adjust input for test case 5 if needed
-			input := tt.filePath
-			if tt.name == "package name with underscores" {
-				input = "libgdk-pixbuf_2.40.0+dfsg-3_amd64.deb"
-			}
-			
-			got := parsePackageNameVersion(input)
+			got := parsePackageNameVersion(tt.filePath)
 			if got.name != tt.wantName {
-				t.Errorf("parsePackageNameVersion(%q).name = %q, want %q", input, got.name, tt.wantName)
+				t.Errorf("parsePackageNameVersion(%q).name = %q, want %q", tt.filePath, got.name, tt.wantName)
 			}
 			if got.version != tt.wantVer {
-				t.Errorf("parsePackageNameVersion(%q).version = %q, want %q", input, got.version, tt.wantVer)
+				t.Errorf("parsePackageNameVersion(%q).version = %q, want %q", tt.filePath, got.version, tt.wantVer)
 			}
 		})
 	}
@@ -84,7 +73,7 @@ func TestParsePackageNameVersion(t *testing.T) {
 func TestShouldExcludePackageByName(t *testing.T) {
 	config := &MirrorConfig{
 		Filters: &PackageFilters{
-			ExcludePatterns: []string{"vim*", "emacs", "*debug*"},
+			ExcludePatterns: []string{"vim*", "emacs", "*debug*", "*-dev"},
 		},
 	}
 	ap := &APTParser{
@@ -134,6 +123,18 @@ func TestShouldExcludePackageByName(t *testing.T) {
 			version: "1.0-debug",
 			want:    true,
 		},
+		{
+			name:    "pattern match exclusion (suffix)",
+			pkgName: "libfoo-dev",
+			version: "1.0",
+			want:    true,
+		},
+		{
+			name:    "no match for similar suffix",
+			pkgName: "libfoo-devel",
+			version: "1.0",
+			want:    false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -152,30 +153,28 @@ func TestApplyPackageFilters(t *testing.T) {
 		"pool/vim_8.0_amd64.deb": apt.MakeFileInfoNoChecksum("pool/vim_8.0_amd64.deb", 100),
 		"pool/vim_8.1_amd64.deb": apt.MakeFileInfoNoChecksum("pool/vim_8.1_amd64.deb", 100),
 		"pool/vim_8.2_amd64.deb": apt.MakeFileInfoNoChecksum("pool/vim_8.2_amd64.deb", 100), // Newest
-		
+
 		"pool/nano_4.0_amd64.deb": apt.MakeFileInfoNoChecksum("pool/nano_4.0_amd64.deb", 100),
-		
+
 		"pool/exclude-me_1.0_amd64.deb": apt.MakeFileInfoNoChecksum("pool/exclude-me_1.0_amd64.deb", 100),
-		
+
 		"pool/not-a-package.txt": apt.MakeFileInfoNoChecksum("pool/not-a-package.txt", 10),
 	}
 
 	tests := []struct {
-		name          string
-		keepVersions  int
-		exclude       []string
-		wantCount     int
-		wantPresent   []string
-		wantMissing   []string
+		name         string
+		keepVersions int
+		exclude      []string
+		wantCount    int
+		wantPresent  []string
+		wantMissing  []string
 	}{
 		{
 			name:         "no filters",
 			keepVersions: 0,
 			exclude:      nil,
-			wantCount:    6, // All files kept, including non-package? No, non-package is skipped in implementation
-			// Implementation: parsePackageNameVersion checks suffix. .txt fails.
-			// So "not-a-package.txt" is skipped. Total packages: 5.
-			wantPresent: []string{"pool/vim_8.2_amd64.deb", "pool/exclude-me_1.0_amd64.deb"},
+			wantCount:    5, // vim (3), nano (1), exclude-me (1). not-a-package.txt is skipped.
+			wantPresent:  []string{"pool/vim_8.2_amd64.deb", "pool/exclude-me_1.0_amd64.deb"},
 		},
 		{
 			name:         "keep last 2 versions",
@@ -183,7 +182,7 @@ func TestApplyPackageFilters(t *testing.T) {
 			exclude:      nil,
 			wantCount:    4, // vim (3->2), nano (1->1), exclude-me (1->1) = 4
 			wantPresent:  []string{"pool/vim_8.2_amd64.deb", "pool/vim_8.1_amd64.deb"},
-			wantMissing:  []string{"pool/vim_8.0_amd64.deb"}, // Oldest dropped
+			wantMissing:  []string{"pool/vim_8.0_amd64.deb"},
 		},
 		{
 			name:         "exclude pattern",
@@ -196,10 +195,9 @@ func TestApplyPackageFilters(t *testing.T) {
 			name:         "combine keep versions and exclude",
 			keepVersions: 1,
 			exclude:      []string{"nano"},
-			wantCount:    1, // vim (3->1), nano (excluded), exclude-me (1->0 if excluded? no, kept 1). Wait.
-			// exclude="nano". vim kept 1 (newest). exclude-me kept 1. Total 2.
-			wantPresent: []string{"pool/vim_8.2_amd64.deb", "pool/exclude-me_1.0_amd64.deb"},
-			wantMissing: []string{"pool/vim_8.1_amd64.deb", "pool/vim_8.0_amd64.deb", "pool/nano_4.0_amd64.deb"},
+			wantCount:    2, // vim (3->1), nano (excluded), exclude-me (1->1). Total 2.
+			wantPresent:  []string{"pool/vim_8.2_amd64.deb", "pool/exclude-me_1.0_amd64.deb"},
+			wantMissing:  []string{"pool/vim_8.1_amd64.deb", "pool/vim_8.0_amd64.deb", "pool/nano_4.0_amd64.deb"},
 		},
 	}
 
@@ -216,37 +214,25 @@ func TestApplyPackageFilters(t *testing.T) {
 				mirrorID: "test",
 			}
 
-			// We need a fresh map copy because applyPackageFilters returns a new map 
-			// but we want to ensure isolation
-			// Actually the function takes a map and returns a map.
-			
 			gotMap := ap.applyPackageFilters(itemMap)
-			
+
+			// Check count
+			if len(gotMap) != tt.wantCount {
+				t.Errorf("got %d items, want %d", len(gotMap), tt.wantCount)
+			}
+
 			// Check presence
 			for _, p := range tt.wantPresent {
 				if _, ok := gotMap[p]; !ok {
 					t.Errorf("expected %s to be present", p)
 				}
 			}
-			
+
 			// Check absence
 			for _, p := range tt.wantMissing {
 				if _, ok := gotMap[p]; ok {
 					t.Errorf("expected %s to be missing", p)
 				}
-			}
-			
-			// Note on count: Since non-packages are skipped by parsePackageNameVersion logic inside applyPackageFilters,
-			// they won't be in the output map even with no filters.
-			// "not-a-package.txt" is always dropped.
-			// Test case 1 "no filters" -> 5 items.
-			// Test case 2 -> 4 items.
-			// Test case 3 -> 4 items.
-			// Test case 4 -> 2 items.
-			
-			// Verify exact counts if specified
-			if tt.name == "no filters" && len(gotMap) != 5 {
-				t.Errorf("got %d items, want 5", len(gotMap))
 			}
 		})
 	}
@@ -259,20 +245,20 @@ func TestVerifyPGPSignature_Disabled(t *testing.T) {
 	}
 	// Need to set noPGPCheck on Mirror struct which is passed in
 	// But verifyPGPSignature takes *Mirror
-	
+
 	// We need to construct a Mirror struct.
 	// Since Mirror struct has private fields and we are in the same package, we can set them.
-	
+
 	m := &Mirror{
 		id: "test-mirror",
 		mc: config,
 	}
-	
+
 	ap := &APTParser{
-		config: config,
+		config:   config,
 		mirrorID: "test-mirror",
 	}
-	
+
 	err := ap.verifyPGPSignature(m, "stable", nil)
 	if err != nil {
 		t.Errorf("expected no error when PGP check is disabled, got %v", err)
@@ -281,7 +267,7 @@ func TestVerifyPGPSignature_Disabled(t *testing.T) {
 
 func TestIsIndexFile(t *testing.T) {
 	ap := &APTParser{}
-	
+
 	tests := []struct {
 		path string
 		want bool
@@ -291,13 +277,13 @@ func TestIsIndexFile(t *testing.T) {
 		{"dists/stable/Packages.xz", true},
 		{"dists/stable/Sources", true},
 		{"dists/stable/Sources.gz", true},
-		{"dists/stable/Contents-amd64", false}, // Current implementation does not recognize Contents-arch as index
+		{"dists/stable/Contents-amd64", false},    // Current implementation does not recognize Contents-arch as index
 		{"dists/stable/Contents-amd64.gz", false}, // Current implementation does not recognize Contents-arch as index
-		{"dists/stable/Release", false}, // Release is not an "index" in this context (it's metadata)
+		{"dists/stable/Release", false},           // Release is not an "index" in this context (it's metadata)
 		{"pool/main/p/package.deb", false},
 		{"Index", true},
 	}
-	
+
 	for _, tt := range tests {
 		got := ap.isIndexFile(tt.path)
 		if got != tt.want {
