@@ -129,18 +129,18 @@ func TestMirrorConfig(t *testing.T) {
 		t.Error(`should match stable main binary-amd64 Packages`)
 	}
 
-	// Test openenclave mirror
-	mc, ok = c.Mirrors["openenclave"]
+	// Test azure-cli mirror
+	mc, ok = c.Mirrors["azure-cli"]
 	if !ok {
-		t.Fatal(`c.Mirrors["openenclave"] not found`)
+		t.Fatal(`c.Mirrors["azure-cli"] not found`)
 	}
 	if err := mc.Check(); err != nil {
 		t.Error(err)
 	}
 
-	// Test that bionic suite works
-	if !mc.MatchingIndex("dists/bionic/main/binary-amd64/Packages") {
-		t.Error(`should match bionic main binary-amd64 Packages`)
+	// Test that noble suite works
+	if !mc.MatchingIndex("dists/noble/main/binary-amd64/Packages") {
+		t.Error(`should match noble main binary-amd64 Packages`)
 	}
 }
 

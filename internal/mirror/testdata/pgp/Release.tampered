@@ -1,0 +1,14 @@
+Origin: Test Repository TAMPERED
+Label: test-repo
+Suite: stable
+Codename: stable
+Date: Wed, 01 Jan 2026 16:00:00 UTC
+Architectures: amd64 arm64
+Components: main contrib
+Description: Test repository for mirrorctl PGP verification
+MD5Sum:
+ d41d8cd98f00b204e9800998ecf8427e        0 main/binary-amd64/Packages
+ d41d8cd98f00b204e9800998ecf8427e        0 main/binary-arm64/Packages
+SHA256:
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855        0 main/binary-amd64/Packages
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855        0 main/binary-arm64/Packages

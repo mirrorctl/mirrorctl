@@ -1,0 +1,6 @@
+%no-protection
+Key-Type: RSA
+Key-Length: 2048
+Name-Real: MirrorCTL Test Key
+Name-Email: test@mirrorctl.local
+Expire-Date: 0

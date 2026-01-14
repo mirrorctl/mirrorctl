@@ -31,18 +31,22 @@ publish_to_staging = true
 [mirrors.amlfs-noble.tls]
 server_name = "packages.microsoft.com"
 
-# OpenEnclave Mirror
-[mirrors.openenclave]
-url = "https://download.01.org/intel-sgx/sgx_repo/ubuntu/"
-suites = ["bionic"]
+# Azure CLI Mirror (replaced openenclave which required a separate PGP key)
+[mirrors.azure-cli]
+url = "https://packages.microsoft.com/repos/azure-cli/"
+suites = ["noble"]
 sections = ["main"]
 architectures = ["amd64"]
 
-# REAR Mirror
+[mirrors.azure-cli.filters]
+keep_versions = 2
+
+# REAR Mirror (flat repository from OpenSUSE - uses different PGP key)
 [mirrors.rear]
 url = "http://download.opensuse.org/repositories/Archiving:/Backup:/Rear/Debian_10/"
 suites = ["./"]
 # Flat repository - no sections or architectures needed
+no_pgp_check = true  # OpenSUSE repo uses different signing key
 
 # SLURM Ubuntu Noble Mirror (no staging)
 [mirrors.slurm-ubuntu-noble]

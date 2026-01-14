@@ -38,6 +38,17 @@ func TestRealIntegration_PublishToStaging(t *testing.T) {
 	// Override paths to use temp directory
 	testConfig.Dir = filepath.Join(tmpDir, "mirrors")
 
+	// Set PGP key path for Microsoft mirrors
+	microsoftKeyPath, err := filepath.Abs(filepath.Join("..", "..", "examples", "keys", "microsoft.asc"))
+	if err != nil {
+		t.Fatalf("failed to get absolute path to Microsoft key: %v", err)
+	}
+	for _, mirrorConfig := range testConfig.Mirrors {
+		if mirrorConfig.PGPKeyPath == "" && !mirrorConfig.NoPGPCheck {
+			mirrorConfig.PGPKeyPath = microsoftKeyPath
+		}
+	}
+
 	// Create the mirrors directory
 	err = os.MkdirAll(testConfig.Dir, 0755)
 	if err != nil {
@@ -162,6 +173,17 @@ func TestRealIntegration_ForceFlag(t *testing.T) {
 	// Override paths
 	testConfig.Dir = filepath.Join(tmpDir, "mirrors")
 
+	// Set PGP key path for Microsoft mirrors
+	microsoftKeyPath, err := filepath.Abs(filepath.Join("..", "..", "examples", "keys", "microsoft.asc"))
+	if err != nil {
+		t.Fatalf("failed to get absolute path to Microsoft key: %v", err)
+	}
+	for _, mirrorConfig := range testConfig.Mirrors {
+		if mirrorConfig.PGPKeyPath == "" && !mirrorConfig.NoPGPCheck {
+			mirrorConfig.PGPKeyPath = microsoftKeyPath
+		}
+	}
+
 	// Create the mirrors directory
 	err = os.MkdirAll(testConfig.Dir, 0755)
 	if err != nil {
@@ -180,21 +202,18 @@ func TestRealIntegration_ForceFlag(t *testing.T) {
 		t.Fatalf("failed to create snapshots directory: %v", err)
 	}
 
-	// Enable publish_to_staging for testing
-	var testMirrorID string
-	for mirrorID, mirrorConfig := range testConfig.Mirrors {
-		mirrorConfig.PublishToStaging = true
-		if mirrorConfig.Snapshot == nil {
-			mirrorConfig.Snapshot = &MirrorSnapshotConfig{}
-		}
-		mirrorConfig.Snapshot.DefaultNameFormat = "test-force-snapshot" // Fixed name
-		testMirrorID = mirrorID
-		break // Just test with the first mirror
+	// Enable publish_to_staging for testing - use azure-cli specifically
+	// (map iteration order is nondeterministic, and some mirrors like rear may be unavailable)
+	testMirrorID := "azure-cli"
+	mirrorConfig, ok := testConfig.Mirrors[testMirrorID]
+	if !ok {
+		t.Skip("azure-cli mirror not found in config")
 	}
-
-	if testMirrorID == "" {
-		t.Skip("no suitable mirror found for force testing")
+	mirrorConfig.PublishToStaging = true
+	if mirrorConfig.Snapshot == nil {
+		mirrorConfig.Snapshot = &MirrorSnapshotConfig{}
 	}
+	mirrorConfig.Snapshot.DefaultNameFormat = "test-force-snapshot" // Fixed name
 
 	t.Logf("Testing --force flag with mirror: %s", testMirrorID)
 
@@ -302,6 +321,17 @@ func TestRealIntegration_MirrorDryRun(t *testing.T) {
 
 	// Override paths
 	testConfig.Dir = filepath.Join(tmpDir, "mirrors")
+
+	// Set PGP key path for Microsoft mirrors
+	microsoftKeyPath, err := filepath.Abs(filepath.Join("..", "..", "examples", "keys", "microsoft.asc"))
+	if err != nil {
+		t.Fatalf("failed to get absolute path to Microsoft key: %v", err)
+	}
+	for _, mirrorConfig := range testConfig.Mirrors {
+		if mirrorConfig.PGPKeyPath == "" && !mirrorConfig.NoPGPCheck {
+			mirrorConfig.PGPKeyPath = microsoftKeyPath
+		}
+	}
 
 	// Create the mirrors directory
 	err = os.MkdirAll(testConfig.Dir, 0755)

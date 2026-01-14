@@ -1,0 +1,6 @@
+%no-protection
+Key-Type: RSA
+Key-Length: 2048
+Name-Real: Wrong Test Key
+Name-Email: wrong@mirrorctl.local
+Expire-Date: 0

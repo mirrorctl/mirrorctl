@@ -1,8 +1,12 @@
 package mirror
 
 import (
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/ProtonMail/gopenpgp/v3/crypto"
 	"github.com/mirrorctl/mirrorctl/internal/apt"
 )
 
@@ -289,5 +293,329 @@ func TestIsIndexFile(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("isIndexFile(%q) = %v, want %v", tt.path, got, tt.want)
 		}
+	}
+}
+
+// Helper function to create a temp file from testdata
+func createTempFileFromTestdata(t *testing.T, testdataPath string) *os.File {
+	t.Helper()
+	content, err := os.ReadFile(testdataPath)
+	if err != nil {
+		t.Fatalf("failed to read testdata file %s: %v", testdataPath, err)
+	}
+	tmpFile, err := os.CreateTemp("", "pgptest-*")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	if _, err := tmpFile.Write(content); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		t.Fatalf("failed to seek temp file: %v", err)
+	}
+	return tmpFile
+}
+
+func TestVerifyPGPSignature_InRelease_Valid(t *testing.T) {
+	testdataDir := filepath.Join("testdata", "pgp")
+	publicKeyPath := filepath.Join(testdataDir, "public-key.asc")
+
+	// Verify test fixtures exist
+	if _, err := os.Stat(publicKeyPath); err != nil {
+		t.Fatalf("test fixture missing: %s", publicKeyPath)
+	}
+
+	config := &MirrorConfig{
+		PGPKeyPath: publicKeyPath,
+		NoPGPCheck: false,
+	}
+	m := &Mirror{
+		id:         "test-mirror",
+		mc:         config,
+		noPGPCheck: false,
+	}
+
+	ap := &APTParser{
+		config:   config,
+		mirrorID: "test-mirror",
+		pgp:      crypto.PGP(),
+	}
+
+	inReleaseFile := createTempFileFromTestdata(t, filepath.Join(testdataDir, "InRelease"))
+	defer func() {
+		inReleaseFile.Close()
+		os.Remove(inReleaseFile.Name())
+	}()
+
+	downloaded := map[string]*dlResult{
+		"InRelease": {
+			tempfile: inReleaseFile,
+		},
+	}
+
+	err := ap.verifyPGPSignature(m, "stable", downloaded)
+	if err != nil {
+		t.Errorf("expected successful verification of valid InRelease, got error: %v", err)
+	}
+}
+
+func TestVerifyPGPSignature_Release_Valid(t *testing.T) {
+	testdataDir := filepath.Join("testdata", "pgp")
+	publicKeyPath := filepath.Join(testdataDir, "public-key.asc")
+
+	config := &MirrorConfig{
+		PGPKeyPath: publicKeyPath,
+		NoPGPCheck: false,
+	}
+	m := &Mirror{
+		id:         "test-mirror",
+		mc:         config,
+		noPGPCheck: false,
+	}
+
+	ap := &APTParser{
+		config:   config,
+		mirrorID: "test-mirror",
+		pgp:      crypto.PGP(),
+	}
+
+	releaseFile := createTempFileFromTestdata(t, filepath.Join(testdataDir, "Release"))
+	releaseGPGFile := createTempFileFromTestdata(t, filepath.Join(testdataDir, "Release.gpg"))
+	defer func() {
+		releaseFile.Close()
+		releaseGPGFile.Close()
+		os.Remove(releaseFile.Name())
+		os.Remove(releaseGPGFile.Name())
+	}()
+
+	downloaded := map[string]*dlResult{
+		"Release": {
+			tempfile: releaseFile,
+		},
+		"Release.gpg": {
+			tempfile: releaseGPGFile,
+		},
+	}
+
+	err := ap.verifyPGPSignature(m, "stable", downloaded)
+	if err != nil {
+		t.Errorf("expected successful verification of valid Release+Release.gpg, got error: %v", err)
+	}
+}
+
+func TestVerifyPGPSignature_InvalidSignature(t *testing.T) {
+	testdataDir := filepath.Join("testdata", "pgp")
+	publicKeyPath := filepath.Join(testdataDir, "public-key.asc")
+
+	config := &MirrorConfig{
+		PGPKeyPath: publicKeyPath,
+		NoPGPCheck: false,
+	}
+	m := &Mirror{
+		id:         "test-mirror",
+		mc:         config,
+		noPGPCheck: false,
+	}
+
+	ap := &APTParser{
+		config:   config,
+		mirrorID: "test-mirror",
+		pgp:      crypto.PGP(),
+	}
+
+	// Use the corrupted InRelease file
+	inReleaseFile := createTempFileFromTestdata(t, filepath.Join(testdataDir, "InRelease.invalid"))
+	defer func() {
+		inReleaseFile.Close()
+		os.Remove(inReleaseFile.Name())
+	}()
+
+	downloaded := map[string]*dlResult{
+		"InRelease": {
+			tempfile: inReleaseFile,
+		},
+	}
+
+	err := ap.verifyPGPSignature(m, "stable", downloaded)
+	if err == nil {
+		t.Error("expected error for invalid signature, got nil")
+	}
+}
+
+func TestVerifyPGPSignature_WrongKey(t *testing.T) {
+	testdataDir := filepath.Join("testdata", "pgp")
+	wrongKeyPath := filepath.Join(testdataDir, "wrong-public-key.asc")
+
+	// Verify test fixtures exist
+	if _, err := os.Stat(wrongKeyPath); err != nil {
+		t.Fatalf("test fixture missing: %s", wrongKeyPath)
+	}
+
+	config := &MirrorConfig{
+		PGPKeyPath: wrongKeyPath,
+		NoPGPCheck: false,
+	}
+	m := &Mirror{
+		id:         "test-mirror",
+		mc:         config,
+		noPGPCheck: false,
+	}
+
+	ap := &APTParser{
+		config:   config,
+		mirrorID: "test-mirror",
+		pgp:      crypto.PGP(),
+	}
+
+	// Try to verify with the correct signature but wrong key
+	inReleaseFile := createTempFileFromTestdata(t, filepath.Join(testdataDir, "InRelease"))
+	defer func() {
+		inReleaseFile.Close()
+		os.Remove(inReleaseFile.Name())
+	}()
+
+	downloaded := map[string]*dlResult{
+		"InRelease": {
+			tempfile: inReleaseFile,
+		},
+	}
+
+	err := ap.verifyPGPSignature(m, "stable", downloaded)
+	if err == nil {
+		t.Error("expected error for wrong key, got nil")
+	}
+}
+
+func TestVerifyPGPSignature_TamperedContent(t *testing.T) {
+	testdataDir := filepath.Join("testdata", "pgp")
+	publicKeyPath := filepath.Join(testdataDir, "public-key.asc")
+
+	config := &MirrorConfig{
+		PGPKeyPath: publicKeyPath,
+		NoPGPCheck: false,
+	}
+	m := &Mirror{
+		id:         "test-mirror",
+		mc:         config,
+		noPGPCheck: false,
+	}
+
+	ap := &APTParser{
+		config:   config,
+		mirrorID: "test-mirror",
+		pgp:      crypto.PGP(),
+	}
+
+	// Use tampered Release with the original (valid) signature
+	tamperedReleaseFile := createTempFileFromTestdata(t, filepath.Join(testdataDir, "Release.tampered"))
+	releaseGPGFile := createTempFileFromTestdata(t, filepath.Join(testdataDir, "Release.gpg"))
+	defer func() {
+		tamperedReleaseFile.Close()
+		releaseGPGFile.Close()
+		os.Remove(tamperedReleaseFile.Name())
+		os.Remove(releaseGPGFile.Name())
+	}()
+
+	downloaded := map[string]*dlResult{
+		"Release": {
+			tempfile: tamperedReleaseFile,
+		},
+		"Release.gpg": {
+			tempfile: releaseGPGFile,
+		},
+	}
+
+	err := ap.verifyPGPSignature(m, "stable", downloaded)
+	if err == nil {
+		t.Error("expected error for tampered content, got nil")
+	}
+}
+
+func TestVerifyPGPSignature_MissingKeyFile(t *testing.T) {
+	config := &MirrorConfig{
+		PGPKeyPath: "/nonexistent/path/to/key.asc",
+		NoPGPCheck: false,
+	}
+	m := &Mirror{
+		id:         "test-mirror",
+		mc:         config,
+		noPGPCheck: false,
+	}
+
+	ap := &APTParser{
+		config:   config,
+		mirrorID: "test-mirror",
+		pgp:      crypto.PGP(),
+	}
+
+	downloaded := map[string]*dlResult{}
+
+	err := ap.verifyPGPSignature(m, "stable", downloaded)
+	if err == nil {
+		t.Error("expected error for missing key file, got nil")
+	}
+}
+
+func TestVerifyPGPSignature_NoSignedFile(t *testing.T) {
+	testdataDir := filepath.Join("testdata", "pgp")
+	publicKeyPath := filepath.Join(testdataDir, "public-key.asc")
+
+	config := &MirrorConfig{
+		PGPKeyPath: publicKeyPath,
+		NoPGPCheck: false,
+	}
+	m := &Mirror{
+		id:         "test-mirror",
+		mc:         config,
+		noPGPCheck: false,
+	}
+
+	ap := &APTParser{
+		config:   config,
+		mirrorID: "test-mirror",
+		pgp:      crypto.PGP(),
+	}
+
+	// Empty downloaded map - no InRelease or Release files
+	downloaded := map[string]*dlResult{}
+
+	err := ap.verifyPGPSignature(m, "stable", downloaded)
+	if err == nil {
+		t.Error("expected error when no signed files are available, got nil")
+	}
+	if err != nil && err.Error() != "PGP verification failed for repo 'test-mirror': no valid signed file found (checked InRelease, Release+Release.gpg)" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestVerifyPGPSignature_MissingPGPKeyPath(t *testing.T) {
+	config := &MirrorConfig{
+		PGPKeyPath: "",
+		NoPGPCheck: false,
+	}
+	m := &Mirror{
+		id:         "test-mirror",
+		mc:         config,
+		noPGPCheck: false,
+	}
+
+	ap := &APTParser{
+		config:   config,
+		mirrorID: "test-mirror",
+		pgp:      crypto.PGP(),
+	}
+
+	downloaded := map[string]*dlResult{}
+
+	err := ap.verifyPGPSignature(m, "stable", downloaded)
+	if err == nil {
+		t.Error("expected error for missing PGPKeyPath, got nil")
+	}
+	if err != nil && err.Error() != "PGP verification is required for repo 'test-mirror', but 'pgp_key_path' is not set" {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
