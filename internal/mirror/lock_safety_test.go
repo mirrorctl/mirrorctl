@@ -204,7 +204,7 @@ func TestFlock_Contention_NonBlocking(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file for locking
-	tmpFile, err := os.CreateTemp("", "flock-contention-*")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "flock-contention-*")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestFlock_Contention_MultipleProcesses(t *testing.T) {
 				failedLocks.Add(1)
 			} else {
 				// If we somehow got the lock, release it
-				fl.Unlock()
+				_ = fl.Unlock()
 			}
 		}()
 	}
@@ -305,7 +305,7 @@ func TestFlock_Contention_MultipleProcesses(t *testing.T) {
 	}
 
 	// Clean up
-	fl.Unlock()
+	_ = fl.Unlock()
 	lockFile.Close()
 }
 
@@ -361,7 +361,7 @@ func TestFlock_SequentialAcquisition(t *testing.T) {
 				successCount.Add(1)
 
 				currentHolder.Store(-1)
-				fl.Unlock()
+				_ = fl.Unlock()
 				f.Close()
 				return
 			}
@@ -384,7 +384,7 @@ func TestFlock_SequentialAcquisition(t *testing.T) {
 func TestFlock_LockAfterClose(t *testing.T) {
 	t.Parallel()
 
-	tmpFile, err := os.CreateTemp("", "flock-closed-*")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "flock-closed-*")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestFlock_CleanupOnFileRemoval(t *testing.T) {
 
 	// Remove the file while lock is held
 	if err := os.Remove(lockPath); err != nil {
-		fl1.Unlock()
+		_ = fl1.Unlock()
 		f1.Close()
 		t.Fatalf("failed to remove lock file: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestFlock_CleanupOnFileRemoval(t *testing.T) {
 	// Create a new file with the same path
 	f2, err := os.Create(lockPath)
 	if err != nil {
-		fl1.Unlock()
+		_ = fl1.Unlock()
 		f1.Close()
 		t.Fatalf("failed to create new lock file: %v", err)
 	}
@@ -447,11 +447,11 @@ func TestFlock_CleanupOnFileRemoval(t *testing.T) {
 	if err := fl2.Lock(); err != nil {
 		t.Errorf("should be able to lock new file: %v", err)
 	} else {
-		fl2.Unlock()
+		_ = fl2.Unlock()
 	}
 
 	// Clean up original lock
-	fl1.Unlock()
+	_ = fl1.Unlock()
 	f1.Close()
 }
 
@@ -462,7 +462,7 @@ func TestFlock_CleanupOnFileRemoval(t *testing.T) {
 func TestFlock_RaceCondition_ConcurrentLockUnlock(t *testing.T) {
 	t.Parallel()
 
-	tmpFile, err := os.CreateTemp("", "flock-race-*")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "flock-race-*")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
@@ -486,7 +486,7 @@ func TestFlock_RaceCondition_ConcurrentLockUnlock(t *testing.T) {
 				if err := fl.Lock(); err == nil {
 					// Small delay to increase chance of races
 					time.Sleep(time.Microsecond)
-					fl.Unlock()
+					_ = fl.Unlock()
 				}
 			}
 		}()
@@ -527,7 +527,7 @@ func TestFlock_RaceCondition_FileDescriptorReuse(t *testing.T) {
 				if err := fl.Lock(); err == nil {
 					lockAcquired.Add(1)
 					time.Sleep(time.Millisecond)
-					fl.Unlock()
+					_ = fl.Unlock()
 				}
 				f.Close()
 			}
@@ -588,7 +588,7 @@ func TestRun_LockContention(t *testing.T) {
 	if err := fl.Lock(); err != nil {
 		t.Fatalf("failed to acquire lock: %v", err)
 	}
-	defer fl.Unlock()
+	defer func() { _ = fl.Unlock() }()
 
 	config := &Config{
 		Dir:      tmpDir,
@@ -692,7 +692,7 @@ func TestFlock_StressTest(t *testing.T) {
 				if err := fl.Lock(); err == nil {
 					totalLocks.Add(1)
 					// Very brief hold
-					fl.Unlock()
+					_ = fl.Unlock()
 				}
 				f.Close()
 			}
@@ -719,7 +719,7 @@ func TestFlock_SyscallError(t *testing.T) {
 	t.Parallel()
 
 	// Create a temp file, get its fd, then close it to create an invalid fd scenario
-	tmpFile, err := os.CreateTemp("", "flock-syscall-*")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "flock-syscall-*")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
@@ -748,7 +748,7 @@ func TestFlock_SyscallError(t *testing.T) {
 func TestFlock_EWOULDBLOCK(t *testing.T) {
 	t.Parallel()
 
-	tmpFile, err := os.CreateTemp("", "flock-ewouldblock-*")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "flock-ewouldblock-*")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
@@ -769,12 +769,12 @@ func TestFlock_EWOULDBLOCK(t *testing.T) {
 	if err := fl1.Lock(); err != nil {
 		t.Fatalf("first lock failed: %v", err)
 	}
-	defer fl1.Unlock()
+	defer func() { _ = fl1.Unlock() }()
 
 	// Second lock should get EWOULDBLOCK
 	err = fl2.Lock()
 	if err == nil {
-		fl2.Unlock()
+		_ = fl2.Unlock()
 		t.Fatal("second lock should fail")
 	}
 

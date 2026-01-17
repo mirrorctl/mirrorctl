@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
+
 	"github.com/mirrorctl/mirrorctl/internal/apt"
 )
 
@@ -303,7 +304,7 @@ func createTempFileFromTestdata(t *testing.T, testdataPath string) *os.File {
 	if err != nil {
 		t.Fatalf("failed to read testdata file %s: %v", testdataPath, err)
 	}
-	tmpFile, err := os.CreateTemp("", "pgptest-*")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "pgptest-*")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
